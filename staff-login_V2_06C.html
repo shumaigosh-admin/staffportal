@@ -80,6 +80,7 @@ body {
   width: 520px; height: 520px; border-radius: 50%;
   background: radial-gradient(circle, rgba(224,85,128,0.14) 0%, transparent 70%);
   top: -120px; left: 50%; transform: translateX(-50%);
+  isolation: isolate;
 }
 
 /* ============================================================
@@ -100,7 +101,7 @@ body {
    ============================================================ */
 .sp-view {
   display: none;
-  position: relative; z-index: 1;
+  position: relative; z-index: 10;
   min-height: 100dvh;
   flex-direction: column; align-items: center;
   padding: 14px 20px 80px;
