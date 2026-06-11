@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Shumai-Gosh! — Staff Portal</title>
+<title>Shumai-Gosh! — Staff Portal V2.06D</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
@@ -1097,6 +1097,92 @@ body {
   line-height: 1.55; max-width: 280px;
 }
 
+/* ============================================================
+   V2.06D — QR VALIDATION RESULT STATES
+   Four distinct failure states + a shared base card
+   ============================================================ */
+
+/* Shared base for all QR failure cards */
+.cl-qr-result {
+  width: 100%;
+  border-radius: var(--sg-radius-lg);
+  padding: 36px 24px 28px;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  text-align: center;
+  animation: pop-in 0.55s cubic-bezier(0.34,1.56,0.64,1) both;
+  position: relative; overflow: hidden;
+}
+.cl-qr-result::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 5px;
+  border-radius: var(--sg-radius-lg) var(--sg-radius-lg) 0 0;
+}
+
+/* INVALID — amber/orange (unknown / bad structure) */
+.cl-qr-result--invalid {
+  background: rgba(255,155,0,0.08);
+  border: 1.5px solid rgba(255,155,0,0.28);
+}
+.cl-qr-result--invalid::before {
+  background: linear-gradient(90deg, #FF9B00, #FFB800);
+}
+
+/* CORRUPTED — red (non-JSON / unreadable) */
+.cl-qr-result--corrupted {
+  background: rgba(214,48,96,0.08);
+  border: 1.5px solid rgba(214,48,96,0.28);
+}
+.cl-qr-result--corrupted::before {
+  background: linear-gradient(90deg, #D63060, #F47098);
+}
+
+/* TAMPERED — deep red/crimson (signature mismatch) */
+.cl-qr-result--tampered {
+  background: rgba(160,0,40,0.12);
+  border: 1.5px solid rgba(200,30,60,0.35);
+}
+.cl-qr-result--tampered::before {
+  background: linear-gradient(90deg, #8B0020, #D63060);
+}
+
+/* EXPIRED — purple/indigo (issuedAt > session window) */
+.cl-qr-result--expired {
+  background: rgba(100,60,180,0.1);
+  border: 1.5px solid rgba(130,80,200,0.3);
+}
+.cl-qr-result--expired::before {
+  background: linear-gradient(90deg, #6430B4, #9060E0);
+}
+
+.cl-qr-result__icon  { font-size: 48px; line-height: 1; margin-bottom: 2px; }
+
+.cl-qr-result__title {
+  font-family: var(--sg-font-display); font-size: 22px; color: #fff;
+  margin-bottom: 2px;
+}
+
+.cl-qr-result__badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 10px; font-weight: 800; letter-spacing: 0.14em;
+  text-transform: uppercase; padding: 4px 12px;
+  border-radius: var(--sg-radius-pill);
+  margin-bottom: 2px;
+}
+.cl-qr-result--invalid  .cl-qr-result__badge { color: #FFB800; background: rgba(255,184,0,0.12);  border: 1px solid rgba(255,184,0,0.28); }
+.cl-qr-result--corrupted .cl-qr-result__badge { color: #F47098; background: rgba(244,112,152,0.12); border: 1px solid rgba(244,112,152,0.28); }
+.cl-qr-result--tampered  .cl-qr-result__badge { color: #FF6080; background: rgba(255,96,128,0.12);  border: 1px solid rgba(255,96,128,0.28); }
+.cl-qr-result--expired   .cl-qr-result__badge { color: #A880F0; background: rgba(168,128,240,0.12); border: 1px solid rgba(168,128,240,0.28); }
+
+.cl-qr-result__msg {
+  font-size: 12.5px; font-weight: 700; color: rgba(255,200,180,0.5);
+  line-height: 1.6; max-width: 290px;
+}
+
+.cl-qr-result__detail {
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em;
+  color: rgba(255,200,180,0.28); margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
 @media(prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:0.01ms !important;transition-duration:0.01ms !important;}
 }
@@ -1407,7 +1493,8 @@ body {
 
     <p class="sp-footer-note" style="max-width:480px; margin-top:auto; padding:24px 24px 0;">
       <strong>Shumai-Gosh!</strong> Staff Portal · Camera Integration V2.06B<br>
-      QR detection available in V2.06C.
+      <!-- V2.06C: QR decoding library comment updated -->
+      QR detection V2.06C · QR validation V2.06D.
     </p>
 
   </div><!-- /.sc-page -->
@@ -1480,11 +1567,74 @@ body {
         </button>
       </div>
 
+      <!-- ── V2.06D: INVALID QR ─────────────────────────────── -->
+      <div class="cl-qr-result cl-qr-result--invalid" id="clInvalidQRCard" style="display:none;" role="alert">
+        <span class="cl-qr-result__icon" aria-hidden="true">⚠️</span>
+        <div class="cl-qr-result__badge">Invalid QR</div>
+        <h2 class="cl-qr-result__title">Invalid QR Code</h2>
+        <p class="cl-qr-result__msg">
+          This QR code is missing required fields and cannot be processed.
+          Ask the customer to refresh their QR from the app and try again.
+        </p>
+        <p class="cl-qr-result__detail" id="clInvalidQRDetail"></p>
+        <button class="cl-btn-scan-again" type="button" onclick="closeCustomerLookup()"
+          style="margin-top:14px;" aria-label="Return to scanner">
+          ↻ &nbsp;Scan Again
+        </button>
+      </div>
+
+      <!-- ── V2.06D: CORRUPTED QR ───────────────────────────── -->
+      <div class="cl-qr-result cl-qr-result--corrupted" id="clCorruptedQRCard" style="display:none;" role="alert">
+        <span class="cl-qr-result__icon" aria-hidden="true">💔</span>
+        <div class="cl-qr-result__badge">Corrupted</div>
+        <h2 class="cl-qr-result__title">Corrupted QR Code</h2>
+        <p class="cl-qr-result__msg">
+          This QR code could not be read. It may be damaged, partially obscured, or from an incompatible app.
+          Ask the customer to display their QR again.
+        </p>
+        <button class="cl-btn-scan-again" type="button" onclick="closeCustomerLookup()"
+          style="margin-top:14px;" aria-label="Return to scanner">
+          ↻ &nbsp;Scan Again
+        </button>
+      </div>
+
+      <!-- ── V2.06D: TAMPERED QR ────────────────────────────── -->
+      <div class="cl-qr-result cl-qr-result--tampered" id="clTamperedQRCard" style="display:none;" role="alert">
+        <span class="cl-qr-result__icon" aria-hidden="true">🚫</span>
+        <div class="cl-qr-result__badge">Validation Failed</div>
+        <h2 class="cl-qr-result__title">QR Validation Failed</h2>
+        <p class="cl-qr-result__msg">
+          This QR code's security signature does not match. It may have been modified or forged.
+          Do not award a stamp. Please report this to your manager.
+        </p>
+        <p class="cl-qr-result__detail" id="clTamperedQRDetail"></p>
+        <button class="cl-btn-scan-again" type="button" onclick="closeCustomerLookup()"
+          style="margin-top:14px;" aria-label="Return to scanner">
+          ↻ &nbsp;Scan Again
+        </button>
+      </div>
+
+      <!-- ── V2.06D: EXPIRED QR ─────────────────────────────── -->
+      <div class="cl-qr-result cl-qr-result--expired" id="clExpiredQRCard" style="display:none;" role="alert">
+        <span class="cl-qr-result__icon" aria-hidden="true">⏰</span>
+        <div class="cl-qr-result__badge">Session Expired</div>
+        <h2 class="cl-qr-result__title">QR Session Expired</h2>
+        <p class="cl-qr-result__msg">
+          This QR code has expired. For security, QR codes are valid for 24 hours.
+          Ask the customer to tap <strong style="color:rgba(255,200,180,0.7)">Refresh QR</strong> in their app and present it again.
+        </p>
+        <p class="cl-qr-result__detail" id="clExpiredQRDetail"></p>
+        <button class="cl-btn-scan-again" type="button" onclick="closeCustomerLookup()"
+          style="margin-top:14px;" aria-label="Return to scanner">
+          ↻ &nbsp;Scan Again
+        </button>
+      </div>
+
     </div><!-- /.sc-content -->
 
     <p class="sp-footer-note" style="max-width:480px; margin-top:auto; padding:24px 24px 0;">
-      <strong>Shumai-Gosh!</strong> Staff Portal · Customer Lookup V2.06C<br>
-      QR validation available in V2.06D.
+      <strong>Shumai-Gosh!</strong> Staff Portal · QR Validation V2.06D<br>
+      Signature · Anti-Tamper · Expiry checks active.
     </p>
 
   </div><!-- /.sc-page -->
@@ -2219,47 +2369,243 @@ function scanFrame() {
 }
 
 /* ================================================================
-   SCAN RESULT HANDLER  (V2.06C)
-   Receives raw decoded QR text. Parses the V2.04D secure QR
-   payload, looks up the customer in the shared backend, and
-   routes to the Customer Lookup screen.
-
-   NOTE: V2.06D will insert signature/tamper/expiry validation
-   between decode and lookup. For now, this version performs a
-   best-effort parse only (no signature verification yet).
+   QR VALIDATION ENGINE  (V2.06D)
+   Mirrors the signing logic from index_V2_04D/E.
+   Secret must match SG_QR_SECRET in the customer app.
    ================================================================ */
-async function handleScannedQR(rawText) {
-  setScannerStatus('QR Detected', 'Looking up customer…', 'Checking',
-    'rgba(255,195,0,0.8)', 'rgba(255,195,0,0.75)', 'rgba(255,195,0,0.08)', 'rgba(255,195,0,0.22)');
 
+const SG_QR_SECRET        = 'ShumaGosh!QR-2025-SecureKey#v04D';
+const SG_QR_MAX_AGE_MS    = 24 * 60 * 60 * 1000; /* 24-hour session window */
+
+/**
+ * _sgVerifySignature(customerId, passportNumber, signature)
+ * Recomputes the HMAC-SHA-256 (or fallback hash) from the customer
+ * app and compares it in constant time. Returns true if authentic.
+ */
+async function _sgVerifySignature(customerId, passportNumber, signature) {
+  if (!customerId || !passportNumber || !signature) return false;
+
+  const message = customerId + '|' + passportNumber;
+
+  /* ── Primary path: Web Crypto HMAC-SHA-256 (HTTPS / localhost) ── */
+  try {
+    if (window.crypto && window.crypto.subtle) {
+      const encoder   = new TextEncoder();
+      const keyData   = encoder.encode(SG_QR_SECRET);
+      const msgBytes  = encoder.encode(message);
+      const cryptoKey = await window.crypto.subtle.importKey(
+        'raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+      );
+      const sigBuffer = await window.crypto.subtle.sign('HMAC', cryptoKey, msgBytes);
+      const expected  = Array.from(new Uint8Array(sigBuffer))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+
+      /* Constant-time compare */
+      if (expected.length !== signature.length) return false;
+      let diff = 0;
+      for (let i = 0; i < expected.length; i++) {
+        diff |= expected.charCodeAt(i) ^ signature.charCodeAt(i);
+      }
+      return diff === 0;
+    }
+  } catch (err) {
+    console.warn('[V2.06D] crypto.subtle unavailable, using fallback hash', err);
+  }
+
+  /* ── Fallback path: djb2-based hash (matches customer app fallback) ── */
+  const combined = SG_QR_SECRET + ':' + message;
+  let h1 = 0x811c9dc5, h2 = 0xdeadbeef;
+  for (let i = 0; i < combined.length; i++) {
+    const c = combined.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 0x01000193) >>> 0;
+    h2 = Math.imul(h2 ^ c, 0x811c9dc5) >>> 0;
+  }
+  const expected =
+    (h1 >>> 0).toString(16).padStart(8, '0') +
+    (h2 >>> 0).toString(16).padStart(8, '0') +
+    ((h1 ^ h2 ^ 0xabcd1234) >>> 0).toString(16).padStart(8, '0') +
+    ((h1 * 0x1f + h2) >>> 0).toString(16).padStart(8, '0');
+
+  if (expected.length !== signature.length) return false;
+  let diff = 0;
+  for (let i = 0; i < expected.length; i++) {
+    diff |= expected.charCodeAt(i) ^ signature.charCodeAt(i);
+  }
+  return diff === 0;
+}
+
+/**
+ * validateQRPayload(rawText)
+ *
+ * Returns an object:
+ *   { status: 'ok',       payload }   — all checks passed
+ *   { status: 'corrupted' }           — not valid JSON
+ *   { status: 'invalid',  missing }   — JSON but fields absent
+ *   { status: 'tampered', payload }   — signature mismatch
+ *   { status: 'expired',  payload, issuedAt } — outside session window
+ */
+async function validateQRPayload(rawText) {
+  /* ── 1. Parse ── */
   let payload = null;
   try {
     payload = JSON.parse(rawText);
   } catch {
-    /* Not JSON — cannot extract a customerId. V2.06D will give this
-       a proper "Corrupted QR Code" screen; for now, treat as not found. */
-    payload = null;
+    return { status: 'corrupted' };
   }
 
-  const customerId = payload && payload.customerId ? payload.customerId : null;
+  /* ── 2. Required field check ── */
+  const required = ['customerId', 'passportNumber', 'signature'];
+  const missing  = required.filter(f => !payload[f]);
+  if (missing.length > 0) {
+    return { status: 'invalid', missing };
+  }
+
+  /* ── 3. Expiry check (issuedAt window) ── */
+  if (payload.issuedAt) {
+    const issued = new Date(payload.issuedAt).getTime();
+    if (!isNaN(issued) && Date.now() - issued > SG_QR_MAX_AGE_MS) {
+      return { status: 'expired', payload, issuedAt: payload.issuedAt };
+    }
+  }
+
+  /* ── 4. Signature / tamper check ── */
+  const signatureOk = await _sgVerifySignature(
+    payload.customerId,
+    payload.passportNumber,
+    payload.signature
+  );
+  if (!signatureOk) {
+    return { status: 'tampered', payload };
+  }
+
+  /* ── 5. All checks passed ── */
+  return { status: 'ok', payload };
+}
+
+/* ================================================================
+   SCAN RESULT HANDLER  (V2.06D — replaces V2.06C stub)
+   Full validation gate before any customer data is loaded.
+   ================================================================ */
+async function handleScannedQR(rawText) {
+  setScannerStatus('QR Detected', 'Validating…', 'Checking',
+    'rgba(255,195,0,0.8)', 'rgba(255,195,0,0.75)', 'rgba(255,195,0,0.08)', 'rgba(255,195,0,0.22)');
 
   stopScanLoop();
   stopCamera();
 
-  if (!customerId) {
-    showCustomerLookup(null);
-    return;
-  }
+  const result = await validateQRPayload(rawText);
 
-  const customer = await clFindCustomerById(customerId);
-  showCustomerLookup(customer);
+  switch (result.status) {
+
+    case 'corrupted':
+      showQRFailure('corrupted');
+      return;
+
+    case 'invalid':
+      showQRFailure('invalid', result.missing
+        ? 'Missing: ' + result.missing.join(', ')
+        : '');
+      return;
+
+    case 'tampered':
+      showQRFailure('tampered',
+        result.payload ? 'ID: ' + result.payload.customerId : '');
+      return;
+
+    case 'expired': {
+      let detail = '';
+      if (result.issuedAt) {
+        try {
+          detail = 'Issued: ' + new Date(result.issuedAt).toLocaleString();
+        } catch {}
+      }
+      showQRFailure('expired', detail);
+      return;
+    }
+
+    case 'ok': {
+      setScannerStatus('QR Validated', 'Loading customer…', 'Valid',
+        '#2ED47A', '#2ED47A', 'rgba(46,212,122,0.1)', 'rgba(46,212,122,0.22)');
+      const customer = await clFindCustomerById(result.payload.customerId);
+      showCustomerLookup(customer);
+      return;
+    }
+
+    default:
+      showQRFailure('corrupted');
+  }
 }
 
 /* ================================================================
-   CUSTOMER LOOKUP SCREEN  (V2.06C)
+   CUSTOMER LOOKUP SCREEN  (V2.06C / V2.06D)
    ================================================================ */
 
 const CL_AVATAR_FALLBACK_MAP = { cashier: '🥟', manager: '🥟', admin: '🥟' };
+
+/* All lookup-result card IDs — used to hide siblings before showing one */
+const CL_RESULT_CARDS = [
+  'clFoundCard',
+  'clNotFoundCard',
+  'clInvalidQRCard',
+  'clCorruptedQRCard',
+  'clTamperedQRCard',
+  'clExpiredQRCard'
+];
+
+/**
+ * _clHideAllResultCards()
+ * Hides every result card so we can show exactly one.
+ */
+function _clHideAllResultCards() {
+  CL_RESULT_CARDS.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+}
+
+/**
+ * showQRFailure(type, detail)
+ * Displays one of the four V2.06D QR failure cards and navigates
+ * to the Customer Lookup view.
+ * type: 'invalid' | 'corrupted' | 'tampered' | 'expired'
+ */
+function showQRFailure(type, detail) {
+  _clHideAllResultCards();
+
+  const MAP = {
+    invalid:   { id: 'clInvalidQRCard',   detailId: 'clInvalidQRDetail',
+                 status: 'Invalid QR',      color: 'rgba(255,155,0,0.8)',  colorSoft: 'rgba(255,155,0,0.75)',
+                 bg: 'rgba(255,155,0,0.08)', border: 'rgba(255,155,0,0.22)' },
+    corrupted: { id: 'clCorruptedQRCard',  detailId: null,
+                 status: 'Corrupted QR',    color: '#D63060',              colorSoft: '#F47098',
+                 bg: 'rgba(214,48,96,0.1)', border: 'rgba(214,48,96,0.3)' },
+    tampered:  { id: 'clTamperedQRCard',   detailId: 'clTamperedQRDetail',
+                 status: 'Tampered QR',     color: '#FF6080',              colorSoft: '#FF8090',
+                 bg: 'rgba(160,0,40,0.12)', border: 'rgba(200,30,60,0.3)' },
+    expired:   { id: 'clExpiredQRCard',    detailId: 'clExpiredQRDetail',
+                 status: 'QR Expired',      color: '#A880F0',              colorSoft: '#B898F8',
+                 bg: 'rgba(100,60,180,0.1)', border: 'rgba(130,80,200,0.28)' }
+  };
+
+  const cfg = MAP[type] || MAP.corrupted;
+
+  /* Show card */
+  const card = document.getElementById(cfg.id);
+  if (card) card.style.display = 'flex';
+
+  /* Populate optional detail line */
+  if (cfg.detailId && detail) {
+    const detailEl = document.getElementById(cfg.detailId);
+    if (detailEl) detailEl.textContent = detail;
+  }
+
+  /* Update scanner status chip */
+  setScannerStatus(cfg.status, 'See result below', cfg.status,
+    cfg.color, cfg.colorSoft, cfg.bg, cfg.border);
+
+  showStaffView('spViewCustomerLookup');
+}
 
 /**
  * showCustomerLookup(customer)
@@ -2267,6 +2613,8 @@ const CL_AVATAR_FALLBACK_MAP = { cashier: '🥟', manager: '🥟', admin: '🥟'
  * then navigates to the Customer Lookup view.
  */
 function showCustomerLookup(customer) {
+  _clHideAllResultCards();
+
   const foundCard    = document.getElementById('clFoundCard');
   const notFoundCard = document.getElementById('clNotFoundCard');
 
