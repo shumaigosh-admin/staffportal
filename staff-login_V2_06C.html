@@ -2379,6 +2379,11 @@ async function handleStartScanner() {
     video.classList.add('is-active');
     document.getElementById('scViewfinder').classList.add('is-camera-active');
 
+    /* Mobile fix: autoplay attribute alone is not enough on Android/iOS.
+       Calling play() explicitly ensures readyState reaches HAVE_ENOUGH_DATA
+       so the jsQR scan loop can actually capture frames. */
+    video.play().catch(() => {});
+
     hideCameraError();
     setScannerStatus('Camera Active', 'Scanning for QR Code…', 'Live',
       '#2ED47A', '#2ED47A', 'rgba(46,212,122,0.1)', 'rgba(46,212,122,0.22)');
