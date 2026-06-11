@@ -1572,6 +1572,44 @@ body {
         Scan QR Code
       </button>
 
+      <!-- Manual ID entry fallback -->
+      <div class="sp-divider" style="width:100%; margin: 4px 0 0;">
+        <div class="sp-divider__line"></div>
+        <div class="sp-divider__text">or enter ID manually</div>
+        <div class="sp-divider__line"></div>
+      </div>
+
+      <div style="width:100%; display:flex; gap:10px; align-items:stretch;">
+        <div class="sg-field" style="flex:1; margin-bottom:0;">
+          <div class="sg-field__input-wrap">
+            <span class="sg-field__icon">🪪</span>
+            <input class="sg-field__input" type="text" id="scManualIdInput"
+              placeholder="e.g. SG-00123"
+              autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false"
+              aria-label="Customer ID"
+              onkeydown="if(event.key==='Enter') handleManualIdLookup()">
+          </div>
+        </div>
+        <button type="button"
+          onclick="handleManualIdLookup()"
+          style="
+            height:52px; padding:0 20px; flex-shrink:0;
+            font-family:var(--sg-font-display); font-size:15px; color:#fff;
+            background:linear-gradient(135deg,var(--sg-pink-deep),var(--sg-pink));
+            border:none; border-radius:var(--sg-radius-md); cursor:pointer;
+            box-shadow:0 4px 16px rgba(224,85,128,0.4);
+            transition:transform 0.15s,box-shadow 0.15s;
+            white-space:nowrap;"
+          aria-label="Look up customer by ID">
+          Look Up
+        </button>
+      </div>
+      <div id="scManualIdMsg" style="
+        width:100%; font-size:12px; font-weight:700;
+        color:#F47098; min-height:16px; margin-top:-8px;
+        display:none;">
+      </div>
+
       <!-- Back button -->
       <button class="sc-btn-back" type="button"
         onclick="closeScanner()" aria-label="Return to Staff Dashboard">
@@ -1582,8 +1620,7 @@ body {
 
     <p class="sp-footer-note" style="max-width:480px; margin-top:auto; padding:24px 24px 0;">
       <strong>Shumai-Gosh!</strong> Staff Portal · Camera Integration V2.06B<br>
-      <!-- V2.06C: QR decoding library comment updated -->
-      QR detection V2.06C · QR validation V2.06D.
+      QR detection V2.06C · QR validation V2.06D · Manual lookup V2.07B.
     </p>
 
   </div><!-- /.sc-page -->
@@ -3174,7 +3211,51 @@ async function handleClaimReward() {
 }
 
 /**
- * closeCustomerLookup()
+ * handleManualIdLookup()
+ * Staff types a customer ID directly — looks it up in Firebase just like a QR scan.
+ */
+async function handleManualIdLookup() {
+  const input  = document.getElementById('scManualIdInput');
+  const msgEl  = document.getElementById('scManualIdMsg');
+  if (!input) return;
+
+  const raw = input.value.trim();
+  if (!raw) {
+    msgEl.textContent = '⚠️ Please enter a Customer ID first.';
+    msgEl.style.display = 'block';
+    return;
+  }
+  msgEl.style.display = 'none';
+
+  /* Normalise — accept with or without the SG- prefix */
+  const customerId = raw.toUpperCase().startsWith('SG-') ? raw.toUpperCase() : 'SG-' + raw.toUpperCase();
+
+  setScannerStatus('Looking Up…', customerId, 'Checking',
+    'rgba(255,195,0,0.8)', 'rgba(255,195,0,0.75)',
+    'rgba(255,195,0,0.08)', 'rgba(255,195,0,0.22)');
+
+  try {
+    const customer = await SG_BACKEND.get('customers:' + customerId);
+    if (!customer) {
+      msgEl.textContent = '❌ Customer ID not found: ' + customerId;
+      msgEl.style.display = 'block';
+      setScannerStatus('Not Found', 'Check the ID and try again', 'Error',
+        '#D63060', '#F47098', 'rgba(214,48,96,0.1)', 'rgba(214,48,96,0.3)');
+      return;
+    }
+    /* Success — hand off to the same lookup screen QR scanning uses */
+    input.value = '';
+    loadCustomerLookup(customerId);
+    showStaffView('spViewCustomerLookup');
+  } catch(e) {
+    msgEl.textContent = '❌ Lookup failed. Check connection and try again.';
+    msgEl.style.display = 'block';
+    setScannerStatus('Error', 'Could not reach database', 'Error',
+      '#D63060', '#F47098', 'rgba(214,48,96,0.1)', 'rgba(214,48,96,0.3)');
+  }
+}
+
+
  * Returns to the scanner screen, ready for another scan.
  */
 function closeCustomerLookup() {
