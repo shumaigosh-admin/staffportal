@@ -1934,8 +1934,8 @@ function handleFeatureClick(cardEl, featureLabel) {
     return;
   }
 
-  /* Feature routing — add real screens as they are built */
-  if (feature === 'award_stamp') {
+  /* Feature routing */
+  if (feature === 'award_stamp' || feature === 'redeem_reward') {
     openScanner();
     return;
   }
