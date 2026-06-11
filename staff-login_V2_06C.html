@@ -9,6 +9,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 <!-- V2.06C: QR decoding library -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsqr/1.4.0/jsQR.js"></script>
+<!-- Firebase SDK (compat build) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <style>
 
 /* ============================================================
@@ -1662,11 +1665,6 @@ body {
 <!-- Toast -->
 <div class="sp-toast" id="spToast" role="status" aria-live="polite" aria-atomic="true"></div>
 
-<!-- ================================================================
-     FIREBASE SDK  — V2.06D (compat build)
-     ================================================================ -->
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script>
 /* ================================================================
    STAFF PORTAL — SESSION NAMESPACE
@@ -1681,16 +1679,16 @@ const SP_SESSION_ID_KEY   = 'sp_activeStaffId';
 const SP_SESSION_ROLE_KEY = 'sp_activeStaffRole';
 
 /* ================================================================
-   V2.06D — SHARED CUSTOMER DATA ACCESS
-   Same Firebase Realtime Database used by the Customer App.
+   V2.06C — SHARED CUSTOMER DATA ACCESS
+   Reads from the same shared backend + local cache used by the
+   Customer App (see index_V2_04E.html "V2.04A — ARCHITECTURE").
    Staff Portal does NOT maintain a separate customer database.
 
-   Collections:
-     customers/{customerId}  → customer record JSON
+   Collections (shared=true):
+     customers:{customerId}  → customer record JSON
    Local cache (offline fallback):
      sg_cache_customers      → array of customer records
    ================================================================ */
-
 firebase.initializeApp({
   apiKey:            "AIzaSyAkK4KLS93gwdalrRWPnFFSEuA5iQ2cvPk",
   authDomain:        "shumai-gosh.firebaseapp.com",
@@ -1703,6 +1701,8 @@ firebase.initializeApp({
 
 const _fbDb = firebase.database();
 
+/* Convert colon-key to Firebase-safe path
+   e.g. "customers:SG-000001" → "customers/SG-000001" */
 function _fbPath(key) {
   const colonIdx = key.indexOf(':');
   if (colonIdx === -1) return key.replace(/[.#$[\]]/g, '_');
@@ -2411,45 +2411,42 @@ const SG_QR_SECRET        = 'ShumaGosh!QR-2025-SecureKey#v04D';
 const SG_QR_MAX_AGE_MS    = 24 * 60 * 60 * 1000; /* 24-hour session window */
 
 /**
- * _sgVerifySignature(customerId, passportNumber, signature, algo)
- * Recomputes the signature using whichever algorithm the customer app
- * used (recorded in payload.algo) and compares in constant time.
- * V2.05A: algo field eliminates the http/https mismatch bug.
+ * _sgVerifySignature(customerId, passportNumber, signature)
+ * Recomputes the HMAC-SHA-256 (or fallback hash) from the customer
+ * app and compares it in constant time. Returns true if authentic.
  */
-async function _sgVerifySignature(customerId, passportNumber, signature, algo) {
+async function _sgVerifySignature(customerId, passportNumber, signature) {
   if (!customerId || !passportNumber || !signature) return false;
 
   const message = customerId + '|' + passportNumber;
 
-  /* ── HMAC-SHA-256 path ── */
-  if (algo === 'hmac' || !algo) {
-    try {
-      if (window.crypto && window.crypto.subtle) {
-        const encoder   = new TextEncoder();
-        const keyData   = encoder.encode(SG_QR_SECRET);
-        const msgBytes  = encoder.encode(message);
-        const cryptoKey = await window.crypto.subtle.importKey(
-          'raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
-        );
-        const sigBuffer = await window.crypto.subtle.sign('HMAC', cryptoKey, msgBytes);
-        const expected  = Array.from(new Uint8Array(sigBuffer))
-          .map(b => b.toString(16).padStart(2, '0'))
-          .join('');
-        if (expected.length !== signature.length) return false;
-        let diff = 0;
-        for (let i = 0; i < expected.length; i++) {
-          diff |= expected.charCodeAt(i) ^ signature.charCodeAt(i);
-        }
-        return diff === 0;
+  /* ── Primary path: Web Crypto HMAC-SHA-256 (HTTPS / localhost) ── */
+  try {
+    if (window.crypto && window.crypto.subtle) {
+      const encoder   = new TextEncoder();
+      const keyData   = encoder.encode(SG_QR_SECRET);
+      const msgBytes  = encoder.encode(message);
+      const cryptoKey = await window.crypto.subtle.importKey(
+        'raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+      );
+      const sigBuffer = await window.crypto.subtle.sign('HMAC', cryptoKey, msgBytes);
+      const expected  = Array.from(new Uint8Array(sigBuffer))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+
+      /* Constant-time compare */
+      if (expected.length !== signature.length) return false;
+      let diff = 0;
+      for (let i = 0; i < expected.length; i++) {
+        diff |= expected.charCodeAt(i) ^ signature.charCodeAt(i);
       }
-    } catch (err) {
-      console.warn('[V2.06D] crypto.subtle failed, falling through to djb2', err);
+      return diff === 0;
     }
-    /* If algo was explicitly 'hmac' but crypto.subtle failed, reject */
-    if (algo === 'hmac') return false;
+  } catch (err) {
+    console.warn('[V2.06D] crypto.subtle unavailable, using fallback hash', err);
   }
 
-  /* ── djb2 fallback path ── */
+  /* ── Fallback path: djb2-based hash (matches customer app fallback) ── */
   const combined = SG_QR_SECRET + ':' + message;
   let h1 = 0x811c9dc5, h2 = 0xdeadbeef;
   for (let i = 0; i < combined.length; i++) {
@@ -2509,8 +2506,7 @@ async function validateQRPayload(rawText) {
   const signatureOk = await _sgVerifySignature(
     payload.customerId,
     payload.passportNumber,
-    payload.signature,
-    payload.algo || null
+    payload.signature
   );
   if (!signatureOk) {
     return { status: 'tampered', payload };
