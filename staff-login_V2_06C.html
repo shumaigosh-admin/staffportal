@@ -3009,15 +3009,15 @@ function _renderStampHistory(transactions) {
       ? date.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' })
       : '';
     const staffLabel = tx.staffId || '—';
-    return \`
+    return `
       <div class="cl-history-item">
         <div class="cl-history-item__icon" aria-hidden="true">🥟</div>
         <div class="cl-history-item__body">
-          <div class="cl-history-item__txid">\${escapeHtml(tx.transactionId || '—')}</div>
-          <div class="cl-history-item__meta">Staff: \${escapeHtml(staffLabel)}</div>
+          <div class="cl-history-item__txid">${escapeHtml(tx.transactionId || '—')}</div>
+          <div class="cl-history-item__meta">Staff: ${escapeHtml(staffLabel)}</div>
         </div>
-        <div class="cl-history-item__time">\${escapeHtml(dateStr)}<br>\${escapeHtml(timeStr)}</div>
-      </div>\`;
+        <div class="cl-history-item__time">${escapeHtml(dateStr)}<br>${escapeHtml(timeStr)}</div>
+      </div>`;
   }).join('');
 }
 
