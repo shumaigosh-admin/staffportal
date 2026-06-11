@@ -80,7 +80,6 @@ body {
   width: 520px; height: 520px; border-radius: 50%;
   background: radial-gradient(circle, rgba(224,85,128,0.14) 0%, transparent 70%);
   top: -120px; left: 50%; transform: translateX(-50%);
-  isolation: isolate;
 }
 
 /* ============================================================
@@ -101,7 +100,7 @@ body {
    ============================================================ */
 .sp-view {
   display: none;
-  position: relative; z-index: 10;
+  position: relative; z-index: 1;
   min-height: 100dvh;
   flex-direction: column; align-items: center;
   padding: 14px 20px 80px;
@@ -1525,8 +1524,10 @@ body {
       <div class="sc-section-label">Scanner Preview</div>
 
       <!-- Viewfinder -->
-      <div class="sc-viewfinder" id="scViewfinder" role="img" aria-label="Scanner viewfinder">
+      <div class="sc-viewfinder" id="scViewfinder" role="img" aria-label="Scanner viewfinder — camera feed will appear here">
         <div class="sc-viewfinder__frame">
+          <!-- Live camera feed -->
+          <video class="sc-viewfinder__video" id="scCameraVideo" autoplay playsinline muted aria-hidden="true"></video>
           <!-- Scan line -->
           <div class="sc-viewfinder__scanline" aria-hidden="true"></div>
           <!-- Corner brackets -->
@@ -1534,43 +1535,38 @@ body {
           <div class="sc-corner sc-corner--tr" aria-hidden="true"></div>
           <div class="sc-corner sc-corner--bl" aria-hidden="true"></div>
           <div class="sc-corner sc-corner--br" aria-hidden="true"></div>
-          <!-- Preview of captured photo -->
-          <img id="scPhotoPreview" aria-hidden="true"
-            style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:18px;display:none;">
           <!-- Placeholder body -->
-          <div class="sc-viewfinder__body" id="scViewfinderBody">
-            <span class="sc-viewfinder__qr-icon" aria-hidden="true">📷</span>
-            <span class="sc-viewfinder__label">Tap to Scan</span>
+          <div class="sc-viewfinder__body">
+            <span class="sc-viewfinder__qr-icon" aria-hidden="true">⬛</span>
+            <span class="sc-viewfinder__label">Scanner Preview</span>
           </div>
         </div>
       </div>
-
-      <!-- Hidden file input — triggers native OS camera on mobile -->
-      <input type="file" id="scQRFileInput"
-        accept="image/*" capture="environment"
-        style="display:none;"
-        aria-hidden="true"
-        onchange="handleQRPhotoSelected(this)">
-
-      <!-- Hidden canvas for jsQR decoding -->
-      <canvas id="scDecodeCanvas" style="display:none;"></canvas>
 
       <!-- Status area -->
       <div class="sc-status" id="scStatus" role="status" aria-live="polite" aria-atomic="true">
         <div class="sc-status__indicator" id="scStatusDot" aria-hidden="true"></div>
         <div class="sc-status__text">
           <div class="sc-status__title" id="scStatusTitle">Scanner Ready</div>
-          <div class="sc-status__sub"   id="scStatusSub">Tap the button below to scan</div>
+          <div class="sc-status__sub"   id="scStatusSub">Waiting for QR Code</div>
         </div>
         <div class="sc-status__badge"   id="scStatusBadge">Ready</div>
       </div>
 
-      <!-- Primary action — triggers native camera -->
+      <!-- Camera permission denied notice (V2.06B) -->
+      <div class="sc-camera-error" id="scCameraError" role="alert" aria-live="assertive">
+        <span class="sc-camera-error__icon" aria-hidden="true">⚠️</span>
+        <div class="sc-camera-error__text">
+          Camera access required.<br>Please allow camera permission.
+        </div>
+      </div>
+
+      <!-- Primary action -->
       <button class="sc-btn-primary" type="button"
         id="scStartBtn" onclick="handleStartScanner()"
-        aria-label="Open camera to scan customer QR code">
+        aria-label="Start the QR scanner camera">
         <span aria-hidden="true">📷</span>
-        Scan QR Code
+        Start Scanner
       </button>
 
       <!-- Manual ID entry fallback -->
@@ -1591,25 +1587,19 @@ body {
               onkeydown="if(event.key==='Enter') handleManualIdLookup()">
           </div>
         </div>
-        <button type="button"
-          onclick="handleManualIdLookup()"
-          style="
-            height:52px; padding:0 20px; flex-shrink:0;
+        <button type="button" onclick="handleManualIdLookup()"
+          style="height:52px; padding:0 20px; flex-shrink:0;
             font-family:var(--sg-font-display); font-size:15px; color:#fff;
             background:linear-gradient(135deg,var(--sg-pink-deep),var(--sg-pink));
             border:none; border-radius:var(--sg-radius-md); cursor:pointer;
             box-shadow:0 4px 16px rgba(224,85,128,0.4);
-            transition:transform 0.15s,box-shadow 0.15s;
             white-space:nowrap;"
           aria-label="Look up customer by ID">
           Look Up
         </button>
       </div>
-      <div id="scManualIdMsg" style="
-        width:100%; font-size:12px; font-weight:700;
-        color:#F47098; min-height:16px; margin-top:-8px;
-        display:none;">
-      </div>
+      <div id="scManualIdMsg" style="width:100%; font-size:12px; font-weight:700;
+        color:#F47098; min-height:16px; margin-top:-8px; display:none;"></div>
 
       <!-- Back button -->
       <button class="sc-btn-back" type="button"
@@ -2351,145 +2341,107 @@ function loadDashboard(staff) {
 }
 
 /* ================================================================
-   SCANNER  (V2.06C — Photo-based QR scanning)
-   Replaces the getUserMedia live-stream approach with a file input
-   that triggers the native OS camera. This works reliably on all
-   mobile browsers (Android Chrome, iOS Safari) without permission
-   prompts, stream timing issues, or readyState race conditions.
-
-   Flow:
-     1. Staff taps "Scan QR Code"
-     2. Native camera opens (OS-handled)
-     3. Staff takes a photo of customer's QR
-     4. handleQRPhotoSelected() reads the image
-     5. jsQR decodes the still image on a canvas
-     6. handleScannedQR() called — validation + Firebase lookup unchanged
+   SCANNER  (V2.06B — Camera Integration)
+   QR detection: V2.06C
    ================================================================ */
 
-let scIsProcessingScan = false;
+let scCameraStream = null;
+let scScanLoopId   = null; /* requestAnimationFrame handle for QR decode loop */
+let scScanCanvas   = null; /* offscreen canvas reused for frame capture */
+let scIsProcessingScan = false; /* guards against double-handling a decoded QR */
 
 /**
  * openScanner()
  * Navigate from dashboard to the scanner screen.
+ * Enforces staff auth + blocks customer sessions.
  */
 function openScanner() {
   if (!requireStaffAuth()) return;
   if (blockCustomerAccess())  return;
+
+  /* Reset scanner to clean ready-state on each open */
   resetScannerUI();
   showStaffView('spViewScanner');
 }
 
 /**
  * closeScanner()
- * Return to the staff dashboard.
+ * Return to the staff dashboard. Stops any active camera stream
+ * and cancels the QR decode loop.
  */
 function closeScanner() {
   if (!requireStaffAuth()) return;
-  resetScannerUI();
+  stopScanLoop();
+  stopCamera();
   showStaffView('spViewDashboard');
 }
 
 /**
  * handleStartScanner()
- * Triggers the hidden file input which opens the native camera.
+ * Requests camera permission and, if granted, opens a live preview.
+ * If denied, displays a permission-required message.
  */
-function handleStartScanner() {
-  const input = document.getElementById('scQRFileInput');
-  if (input) {
-    /* Reset so the same photo can be re-selected if needed */
-    input.value = '';
-    input.click();
+async function handleStartScanner() {
+  const startBtn = document.getElementById('scStartBtn');
+
+  startBtn.disabled = true;
+  setScannerStatus('Requesting Access', 'Awaiting camera permission…', 'Pending',
+    'rgba(255,195,0,0.8)', 'rgba(255,195,0,0.75)', 'rgba(255,195,0,0.08)', 'rgba(255,195,0,0.22)');
+  hideCameraError();
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    showCameraError();
+    setScannerStatus('Camera Unavailable', 'This device does not support camera access', 'Error',
+      '#D63060', '#F47098', 'rgba(214,48,96,0.1)', 'rgba(214,48,96,0.3)');
+    startBtn.disabled = false;
+    return;
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment' },
+      audio: false
+    });
+
+    scCameraStream = stream;
+
+    const video = document.getElementById('scCameraVideo');
+    video.srcObject = stream;
+    video.classList.add('is-active');
+    document.getElementById('scViewfinder').classList.add('is-camera-active');
+
+    hideCameraError();
+    setScannerStatus('Camera Active', 'Scanning for QR Code…', 'Live',
+      '#2ED47A', '#2ED47A', 'rgba(46,212,122,0.1)', 'rgba(46,212,122,0.22)');
+
+    startBtn.style.opacity = '0.5';
+    startBtn.disabled = true;
+
+    /* V2.06C: begin scanning camera frames for a QR code */
+    startScanLoop();
+
+  } catch (err) {
+    showCameraError();
+    setScannerStatus('Camera Blocked', 'Camera permission was denied', 'Denied',
+      '#D63060', '#F47098', 'rgba(214,48,96,0.1)', 'rgba(214,48,96,0.3)');
+    startBtn.disabled = false;
   }
 }
 
 /**
- * handleQRPhotoSelected(inputEl)
- * Called when staff takes/selects a photo.
- * Draws the image to a canvas, runs jsQR, then calls handleScannedQR().
+ * stopCamera()
+ * Stops any active camera stream and resets the video element.
  */
-function handleQRPhotoSelected(inputEl) {
-  const file = inputEl.files && inputEl.files[0];
-  if (!file) return;
-
-  scIsProcessingScan = true;
-
-  setScannerStatus('Photo Received', 'Reading QR code…', 'Processing',
-    'rgba(255,195,0,0.8)', 'rgba(255,195,0,0.75)',
-    'rgba(255,195,0,0.08)', 'rgba(255,195,0,0.22)');
-
-  /* Show photo preview in viewfinder */
-  const preview = document.getElementById('scPhotoPreview');
-  const body    = document.getElementById('scViewfinderBody');
-  const objUrl  = URL.createObjectURL(file);
-  if (preview) {
-    preview.src = objUrl;
-    preview.style.display = 'block';
+function stopCamera() {
+  stopScanLoop();
+  if (scCameraStream) {
+    scCameraStream.getTracks().forEach(track => track.stop());
+    scCameraStream = null;
   }
-  if (body) body.style.display = 'none';
-
-  const img = new Image();
-  img.onload = function() {
-    URL.revokeObjectURL(objUrl);
-
-    const canvas = document.getElementById('scDecodeCanvas');
-
-    /* Scale down very large photos — jsQR works best under ~1500px wide */
-    const MAX_DIM = 1500;
-    let w = img.naturalWidth;
-    let h = img.naturalHeight;
-    if (w > MAX_DIM || h > MAX_DIM) {
-      const scale = MAX_DIM / Math.max(w, h);
-      w = Math.round(w * scale);
-      h = Math.round(h * scale);
-    }
-    canvas.width  = w;
-    canvas.height = h;
-
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    ctx.drawImage(img, 0, 0, w, h);
-
-    /* Boost contrast slightly so faint/dark QR codes are more detectable */
-    ctx.filter = 'contrast(1.4) brightness(1.05)';
-    ctx.drawImage(img, 0, 0, w, h);
-    ctx.filter = 'none';
-
-    let code = null;
-    try {
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      /* attemptBoth: tries normal AND inverted — fixes dark-background QR codes */
-      code = jsQR(imageData.data, canvas.width, canvas.height,
-                  { inversionAttempts: 'attemptBoth' });
-    } catch(e) {
-      console.warn('[Scanner] jsQR decode error', e);
-    }
-
-    if (code && code.data) {
-      console.log('[Scanner] QR detected in photo');
-      handleScannedQR(code.data);
-    } else {
-      /* Nothing found — show error and let staff try again */
-      console.warn('[Scanner] No QR code found in photo');
-      setScannerStatus('No QR Found', 'Tap below to try again', 'Retry',
-        '#D63060', '#F47098',
-        'rgba(214,48,96,0.1)', 'rgba(214,48,96,0.3)');
-      scIsProcessingScan = false;
-      /* Re-enable the button so staff can retake */
-      const btn = document.getElementById('scStartBtn');
-      if (btn) { btn.disabled = false; btn.style.opacity = ''; }
-    }
-  };
-
-  img.onerror = function() {
-    URL.revokeObjectURL(objUrl);
-    setScannerStatus('Photo Error', 'Could not read the image. Try again.', 'Error',
-      '#D63060', '#F47098',
-      'rgba(214,48,96,0.1)', 'rgba(214,48,96,0.3)');
-    scIsProcessingScan = false;
-    const btn = document.getElementById('scStartBtn');
-    if (btn) { btn.disabled = false; btn.style.opacity = ''; }
-  };
-
-  img.src = objUrl;
+  const video = document.getElementById('scCameraVideo');
+  video.srcObject = null;
+  video.classList.remove('is-active');
+  document.getElementById('scViewfinder').classList.remove('is-camera-active');
 }
 
 /**
@@ -2501,60 +2453,112 @@ function setScannerStatus(title, sub, badgeText, dotColor, badgeColor, badgeBg, 
   const subEl   = document.getElementById('scStatusSub');
   const badge   = document.getElementById('scStatusBadge');
   const dot     = document.getElementById('scStatusDot');
-  if (!titleEl) return;
+
   titleEl.textContent = title;
   subEl.textContent   = sub;
   badge.textContent   = badgeText;
-  badge.style.color       = badgeColor;
-  badge.style.background  = badgeBg;
-  badge.style.borderColor = badgeBorder;
-  dot.style.background    = dotColor;
-  dot.style.boxShadow     = `0 0 8px ${dotColor}`;
+  badge.style.color          = badgeColor;
+  badge.style.background     = badgeBg;
+  badge.style.borderColor    = badgeBorder;
+  dot.style.background       = dotColor;
+  dot.style.boxShadow        = `0 0 8px ${dotColor}`;
 }
 
 function showCameraError() {
-  const el = document.getElementById('scCameraError');
-  if (el) el.classList.add('is-visible');
+  document.getElementById('scCameraError').classList.add('is-visible');
 }
 function hideCameraError() {
-  const el = document.getElementById('scCameraError');
-  if (el) el.classList.remove('is-visible');
+  document.getElementById('scCameraError').classList.remove('is-visible');
 }
 
 /**
  * resetScannerUI()
  * Restore scanner to default ready state.
+ * Called each time the scanner screen is opened.
  */
 function resetScannerUI() {
+  stopCamera();
   hideCameraError();
-  scIsProcessingScan = false;
-
-  /* Clear photo preview */
-  const preview = document.getElementById('scPhotoPreview');
-  const body    = document.getElementById('scViewfinderBody');
-  if (preview) { preview.src = ''; preview.style.display = 'none'; }
-  if (body)    body.style.display = '';
-
-  /* Reset file input */
-  const input = document.getElementById('scQRFileInput');
-  if (input) input.value = '';
 
   const badge    = document.getElementById('scStatusBadge');
   const dot      = document.getElementById('scStatusDot');
   const startBtn = document.getElementById('scStartBtn');
 
-  if (document.getElementById('scStatusTitle'))
-    document.getElementById('scStatusTitle').textContent = 'Scanner Ready';
-  if (document.getElementById('scStatusSub'))
-    document.getElementById('scStatusSub').textContent   = 'Tap the button below to scan';
-  if (badge)    { badge.textContent = 'Ready'; badge.style.cssText = ''; }
-  if (dot)      dot.style.cssText = '';
-  if (startBtn) { startBtn.style.opacity = ''; startBtn.disabled = false; }
+  document.getElementById('scStatusTitle').textContent = 'Scanner Ready';
+  document.getElementById('scStatusSub').textContent   = 'Waiting for QR Code';
+  badge.textContent = 'Ready';
+  badge.style.cssText     = '';
+  dot.style.cssText       = '';
+  startBtn.style.opacity  = '';
+  startBtn.disabled       = false;
+  scIsProcessingScan      = false;
 }
 
-/* Stub — no longer needed but kept so any external call doesn't throw */
-function stopScanLoop() {}
-function stopCamera()   {}
+/* ================================================================
+   QR DECODE LOOP  (V2.06C)
+   Continuously samples frames from the live camera feed and runs
+   them through jsQR. On a successful decode, hands the raw text
+   off to handleScannedQR() and pauses scanning.
+   ================================================================ */
+
+/**
+ * startScanLoop()
+ * Begins sampling video frames via requestAnimationFrame.
+ */
+function startScanLoop() {
+  if (typeof jsQR === 'undefined') {
+    console.warn('[V2.06C] jsQR library not yet loaded — retrying shortly');
+    scScanLoopId = requestAnimationFrame(startScanLoop);
+    return;
+  }
+  if (!scScanCanvas) scScanCanvas = document.createElement('canvas');
+  scIsProcessingScan = false;
+  scScanLoopId = requestAnimationFrame(scanFrame);
+}
+
+/**
+ * stopScanLoop()
+ * Cancels the active decode loop, if any.
+ */
+function stopScanLoop() {
+  if (scScanLoopId) {
+    cancelAnimationFrame(scScanLoopId);
+    scScanLoopId = null;
+  }
+}
+
+/**
+ * scanFrame()
+ * Captures the current video frame, runs jsQR against it, and
+ * either schedules the next frame or hands off a decoded result.
+ */
+function scanFrame() {
+  const video = document.getElementById('scCameraVideo');
+
+  if (!scIsProcessingScan && video && video.readyState === video.HAVE_ENOUGH_DATA) {
+    const w = video.videoWidth, h = video.videoHeight;
+    if (w > 0 && h > 0) {
+      scScanCanvas.width  = w;
+      scScanCanvas.height = h;
+      const ctx = scScanCanvas.getContext('2d', { willReadFrequently: true });
+      ctx.drawImage(video, 0, 0, w, h);
+
+      try {
+        const imageData = ctx.getImageData(0, 0, w, h);
+        const code = jsQR(imageData.data, w, h, { inversionAttempts: 'dontInvert' });
+        if (code && code.data) {
+          scIsProcessingScan = true;
+          handleScannedQR(code.data);
+          return; /* pause loop while we process this scan */
+        }
+      } catch (err) {
+        /* getImageData can throw on some browsers before video is ready — ignore and retry */
+      }
+    }
+  }
+
+  scScanLoopId = requestAnimationFrame(scanFrame);
+}
 
 /* ================================================================
    QR VALIDATION ENGINE  (V2.06D)
@@ -2566,43 +2570,14 @@ const SG_QR_SECRET        = 'ShumaGosh!QR-2025-SecureKey#v04D';
 const SG_QR_MAX_AGE_MS    = 24 * 60 * 60 * 1000; /* 24-hour session window */
 
 /**
- * _sgVerifySignature(customerId, passportNumber, signature, algo)
- * Recomputes the signature from the customer app and compares it in
- * constant time. Returns true if authentic.
- *
- * algo (optional): 'hmac' | 'djb2'
- *   When the Customer App ran on HTTP, crypto.subtle was unavailable
- *   and it used the djb2 fallback, recording algo:"djb2" in the QR
- *   payload.  Passing that value here skips the HMAC attempt and goes
- *   straight to djb2, so the comparison always uses matching algorithms.
+ * _sgVerifySignature(customerId, passportNumber, signature)
+ * Recomputes the HMAC-SHA-256 (or fallback hash) from the customer
+ * app and compares it in constant time. Returns true if authentic.
  */
-async function _sgVerifySignature(customerId, passportNumber, signature, algo) {
+async function _sgVerifySignature(customerId, passportNumber, signature) {
   if (!customerId || !passportNumber || !signature) return false;
 
   const message = customerId + '|' + passportNumber;
-
-  /* ── Fast-path: djb2 (when Customer App flagged it explicitly) ── */
-  if (algo === 'djb2') {
-    console.log('[V2.06D] Verifying with djb2 (as embedded in QR payload)');
-    const combined = SG_QR_SECRET + ':' + message;
-    let h1 = 0x811c9dc5, h2 = 0xdeadbeef;
-    for (let i = 0; i < combined.length; i++) {
-      const c = combined.charCodeAt(i);
-      h1 = Math.imul(h1 ^ c, 0x01000193) >>> 0;
-      h2 = Math.imul(h2 ^ c, 0x811c9dc5) >>> 0;
-    }
-    const djb2Expected =
-      (h1 >>> 0).toString(16).padStart(8, '0') +
-      (h2 >>> 0).toString(16).padStart(8, '0') +
-      ((h1 ^ h2 ^ 0xabcd1234) >>> 0).toString(16).padStart(8, '0') +
-      ((h1 * 0x1f + h2) >>> 0).toString(16).padStart(8, '0');
-    if (djb2Expected.length !== signature.length) return false;
-    let djb2Diff = 0;
-    for (let i = 0; i < djb2Expected.length; i++) {
-      djb2Diff |= djb2Expected.charCodeAt(i) ^ signature.charCodeAt(i);
-    }
-    return djb2Diff === 0;
-  }
 
   /* ── Primary path: Web Crypto HMAC-SHA-256 (HTTPS / localhost) ── */
   try {
@@ -2678,29 +2653,19 @@ async function validateQRPayload(rawText) {
     return { status: 'invalid', missing };
   }
 
-  /* ── 3. Expiry check — DISABLED ─────────────────────────────────
-     Root-cause fix: The Customer App generates QR codes once at
-     registration and never regenerates them (by design: "Unique to you
-     · Never changes"). A 24-hour window therefore rejects every QR that
-     is more than one day old — which is every real customer's QR.
-     Tamper-detection is handled entirely by the HMAC signature (step 4).
-     The issuedAt field is preserved in the payload for audit purposes
-     but is no longer used as a validity gate here.
-  ─────────────────────────────────────────────────────────────────── */
+  /* ── 3. Expiry check (issuedAt window) ── */
+  if (payload.issuedAt) {
+    const issued = new Date(payload.issuedAt).getTime();
+    if (!isNaN(issued) && Date.now() - issued > SG_QR_MAX_AGE_MS) {
+      return { status: 'expired', payload, issuedAt: payload.issuedAt };
+    }
+  }
 
   /* ── 4. Signature / tamper check ── */
-  /* FIX: pass payload.algo so we verify with the same algorithm the
-     Customer App used.  When the Customer App runs on plain HTTP,
-     crypto.subtle is unavailable and it falls back to the djb2 hash;
-     it records that choice as algo:"djb2" in the QR payload.
-     Without reading this field the Staff Portal would always try HMAC
-     first, produce a different hash, and incorrectly flag a legitimate
-     QR as TAMPERED.                                                    */
   const signatureOk = await _sgVerifySignature(
     payload.customerId,
     payload.passportNumber,
-    payload.signature,
-    payload.algo   /* ← pass algo field from QR payload */
+    payload.signature
   );
   if (!signatureOk) {
     return { status: 'tampered', payload };
@@ -2715,8 +2680,6 @@ async function validateQRPayload(rawText) {
    Full validation gate before any customer data is loaded.
    ================================================================ */
 async function handleScannedQR(rawText) {
-  console.log('[Scan] QR decoded. Raw length:', rawText ? rawText.length : 0);
-
   setScannerStatus('QR Detected', 'Validating…', 'Checking',
     'rgba(255,195,0,0.8)', 'rgba(255,195,0,0.75)', 'rgba(255,195,0,0.08)', 'rgba(255,195,0,0.22)');
 
@@ -2724,33 +2687,25 @@ async function handleScannedQR(rawText) {
   stopCamera();
 
   const result = await validateQRPayload(rawText);
-  console.log('[Scan] Validation result:', result.status,
-    result.payload ? '| Customer: ' + result.payload.customerId : '',
-    result.missing ? '| Missing: ' + (result.missing||[]).join(',') : '');
 
   switch (result.status) {
 
     case 'corrupted':
-      console.warn('[Scan] QR Decode Failed — not valid JSON');
       showQRFailure('corrupted');
       return;
 
     case 'invalid':
-      console.warn('[Scan] QR Validation Failed — missing fields:', result.missing);
       showQRFailure('invalid', result.missing
         ? 'Missing: ' + result.missing.join(', ')
         : '');
       return;
 
     case 'tampered':
-      console.warn('[Scan] Invalid Signature — QR may be forged or signed with wrong key.',
-        result.payload ? 'algo in payload: ' + (result.payload.algo || 'none') : '');
       showQRFailure('tampered',
         result.payload ? 'ID: ' + result.payload.customerId : '');
       return;
 
     case 'expired': {
-      console.warn('[Scan] QR Session Expired. issuedAt:', result.issuedAt);
       let detail = '';
       if (result.issuedAt) {
         try {
@@ -2762,18 +2717,14 @@ async function handleScannedQR(rawText) {
     }
 
     case 'ok': {
-      console.log('[Scan] QR validated ✓ Looking up customer:', result.payload.customerId);
       setScannerStatus('QR Validated', 'Loading customer…', 'Valid',
         '#2ED47A', '#2ED47A', 'rgba(46,212,122,0.1)', 'rgba(46,212,122,0.22)');
       const customer = await clFindCustomerById(result.payload.customerId);
-      console.log('[Scan] Customer lookup result:', customer ? 'FOUND — ' + customer.fullName : 'NOT FOUND');
-      if (!customer) console.warn('[Scan] Customer Not Found in Firebase or local cache. ID:', result.payload.customerId);
       showCustomerLookup(customer);
       return;
     }
 
     default:
-      console.error('[Scan] Storage Lookup Failed — unexpected result status:', result.status);
       showQRFailure('corrupted');
   }
 }
@@ -3212,12 +3163,13 @@ async function handleClaimReward() {
 }
 
 /**
- * handleManualIdLookup()
- * Staff types a customer ID directly — looks it up in Firebase just like a QR scan.
+/**
+ * handleManualIdLookup()  — V2.07B
+ * Staff types a customer ID directly and looks it up in Firebase.
  */
 async function handleManualIdLookup() {
-  const input  = document.getElementById('scManualIdInput');
-  const msgEl  = document.getElementById('scManualIdMsg');
+  const input = document.getElementById('scManualIdInput');
+  const msgEl = document.getElementById('scManualIdMsg');
   if (!input) return;
 
   const raw = input.value.trim();
@@ -3228,7 +3180,6 @@ async function handleManualIdLookup() {
   }
   msgEl.style.display = 'none';
 
-  /* Normalise — accept with or without the SG- prefix */
   const customerId = raw.toUpperCase().startsWith('SG-') ? raw.toUpperCase() : 'SG-' + raw.toUpperCase();
 
   setScannerStatus('Looking Up…', customerId, 'Checking',
@@ -3244,7 +3195,6 @@ async function handleManualIdLookup() {
         '#D63060', '#F47098', 'rgba(214,48,96,0.1)', 'rgba(214,48,96,0.3)');
       return;
     }
-    /* Success — hand off to the same lookup screen QR scanning uses */
     input.value = '';
     loadCustomerLookup(customerId);
     showStaffView('spViewCustomerLookup');
@@ -3256,7 +3206,8 @@ async function handleManualIdLookup() {
   }
 }
 
-
+/**
+ * closeCustomerLookup()
  * Returns to the scanner screen, ready for another scan.
  */
 function closeCustomerLookup() {
