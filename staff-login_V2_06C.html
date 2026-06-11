@@ -2394,16 +2394,33 @@ function handleQRPhotoSelected(inputEl) {
     URL.revokeObjectURL(objUrl);
 
     const canvas = document.getElementById('scDecodeCanvas');
-    canvas.width  = img.naturalWidth;
-    canvas.height = img.naturalHeight;
+
+    /* Scale down very large photos — jsQR works best under ~1500px wide */
+    const MAX_DIM = 1500;
+    let w = img.naturalWidth;
+    let h = img.naturalHeight;
+    if (w > MAX_DIM || h > MAX_DIM) {
+      const scale = MAX_DIM / Math.max(w, h);
+      w = Math.round(w * scale);
+      h = Math.round(h * scale);
+    }
+    canvas.width  = w;
+    canvas.height = h;
+
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    ctx.drawImage(img, 0, 0);
+    ctx.drawImage(img, 0, 0, w, h);
+
+    /* Boost contrast slightly so faint/dark QR codes are more detectable */
+    ctx.filter = 'contrast(1.4) brightness(1.05)';
+    ctx.drawImage(img, 0, 0, w, h);
+    ctx.filter = 'none';
 
     let code = null;
     try {
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      /* attemptBoth: tries normal AND inverted — fixes dark-background QR codes */
       code = jsQR(imageData.data, canvas.width, canvas.height,
-                  { inversionAttempts: 'dontInvert' });
+                  { inversionAttempts: 'attemptBoth' });
     } catch(e) {
       console.warn('[Scanner] jsQR decode error', e);
     }
