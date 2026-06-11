@@ -2773,6 +2773,8 @@ function showQRFailure(type, detail) {
  * Renders either the found-customer card or the not-found state,
  * then navigates to the Customer Lookup view.
  */
+let _clActiveCustomerId = null;
+
 function showCustomerLookup(customer) {
   _clHideAllResultCards();
 
@@ -2829,8 +2831,6 @@ function showCustomerLookup(customer) {
      2. Passport progress   → passport:{id}
      3. Activity history    → activity:{id}
    ================================================================ */
-
-let _clActiveCustomerId = null;
 
 /* ── Helpers mirroring customer app logic ── */
 function _deriveRewardStatus(stamps, claimed) {
