@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Shumai-Gosh! — Staff Portal V2.06D</title>
+<title>Shumai-Gosh! — Staff Portal V2.07C</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
@@ -1611,7 +1611,7 @@ body {
 
     <p class="sp-footer-note" style="max-width:480px; margin-top:auto; padding:24px 24px 0;">
       <strong>Shumai-Gosh!</strong> Staff Portal · Camera Integration V2.06B<br>
-      QR detection V2.06C · QR validation V2.06D · Manual lookup V2.07B.
+      QR detection V2.06C · QR validation V2.06D · Manual lookup V2.07B · Duplicate protection V2.07C.
     </p>
 
   </div><!-- /.sc-page -->
@@ -1795,7 +1795,7 @@ body {
     </div><!-- /.sc-content -->
 
     <p class="sp-footer-note" style="max-width:480px; margin-top:auto; padding:24px 24px 0;">
-      <strong>Shumai-Gosh!</strong> Staff Portal · QR Validation V2.06D<br>
+      <strong>Shumai-Gosh!</strong> Staff Portal · QR Validation V2.07D<br>
       Signature · Anti-Tamper · Expiry checks active.
     </p>
 
@@ -1836,6 +1836,142 @@ const SP_LOCKOUT_MS       = 5 * 60 * 1000;
 const SP_STORAGE_KEY      = 'sg_staff_auth';
 const SP_SESSION_ID_KEY   = 'sp_activeStaffId';
 const SP_SESSION_ROLE_KEY = 'sp_activeStaffRole';
+
+/* ================================================================
+   V2.07C — DUPLICATE TRANSACTION PROTECTION
+   Prevents accidental double-stamps, double-rewards, and repeated
+   QR scans of the same customer within a short cooldown window.
+   ================================================================ */
+
+const DP_STAMP_WINDOW_MS = 10 * 1000;  /* 10-second stamp duplicate window */
+const DP_QR_COOLDOWN_MS  =  5 * 1000;  /* 5-second QR re-scan cooldown     */
+const DP_CLAIM_KEY       = 'sg_dp_last_claim'; /* localStorage key          */
+
+/**
+ * _dpLastQRScans
+ * Map of customerId → timestamp of last successful QR scan.
+ * In-memory only — resets on page reload (intentional).
+ */
+const _dpLastQRScans = new Map();
+
+/**
+ * _dpCheckQRCooldown(customerId)
+ * Returns true (= duplicate) if this customer was scanned via QR
+ * within the last DP_QR_COOLDOWN_MS milliseconds.
+ */
+function _dpCheckQRCooldown(customerId) {
+  if (!customerId) return false;
+  const last = _dpLastQRScans.get(customerId);
+  return last && (Date.now() - last) < DP_QR_COOLDOWN_MS;
+}
+
+/**
+ * _dpRecordQRScan(customerId)
+ * Records the timestamp of a successful QR scan for cooldown tracking.
+ */
+function _dpRecordQRScan(customerId) {
+  if (customerId) _dpLastQRScans.set(customerId, Date.now());
+}
+
+/**
+ * _dpCheckStampDuplicate(customerId)
+ * Reads stamps_log:{customerId} from Firebase and checks whether a
+ * stamp was recorded within the last DP_STAMP_WINDOW_MS.
+ * Returns true (= duplicate detected) or false (= safe to proceed).
+ */
+async function _dpCheckStampDuplicate(customerId) {
+  try {
+    const log = await SG_BACKEND.get('stamps_log:' + customerId);
+    if (!Array.isArray(log) || log.length === 0) return false;
+    const latest = log[0]; /* newest first — see _spWriteStampTransaction */
+    if (!latest || !latest.timestamp) return false;
+    const age = Date.now() - new Date(latest.timestamp).getTime();
+    return age < DP_STAMP_WINDOW_MS;
+  } catch {
+    return false; /* if we can't check, allow — don't block on connectivity */
+  }
+}
+
+/**
+ * _dpCheckRewardDuplicate(customerId, cycleStampsBefore)
+ * Guards against double-claiming the same completed reward cycle.
+ * cycleStampsBefore is the stamp count BEFORE the claim (should be ≥ 5).
+ * Stores the last claim cycle fingerprint in localStorage.
+ */
+function _dpCheckRewardDuplicate(customerId, stampsBeforeClaim) {
+  try {
+    const stored = JSON.parse(localStorage.getItem(DP_CLAIM_KEY) || 'null');
+    if (!stored) return false;
+    /* Duplicate if: same customer AND same stamp total AND claimed < 30s ago */
+    const sameCustomer = stored.customerId === customerId;
+    const sameStamps   = stored.stamps     === stampsBeforeClaim;
+    const recent       = (Date.now() - stored.claimedAt) < 30 * 1000;
+    return sameCustomer && sameStamps && recent;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * _dpRecordRewardClaim(customerId, stampsBeforeClaim)
+ * Saves the claim fingerprint so _dpCheckRewardDuplicate can detect a repeat.
+ */
+function _dpRecordRewardClaim(customerId, stampsBeforeClaim) {
+  try {
+    localStorage.setItem(DP_CLAIM_KEY, JSON.stringify({
+      customerId,
+      stamps:    stampsBeforeClaim,
+      claimedAt: Date.now()
+    }));
+  } catch {}
+}
+
+/**
+ * _dpCheckRewardDuplicateRemote(customerId, stampsBeforeClaim)  — V2.07D
+ * Firebase-backed guard against double-claiming the same completed reward
+ * cycle from a DIFFERENT device. Reads reward_claims_log:{customerId} and
+ * checks whether a matching claim (same stamp total) was recorded within
+ * the last 30 seconds. Mirrors _dpCheckStampDuplicate's approach.
+ */
+async function _dpCheckRewardDuplicateRemote(customerId, stampsBeforeClaim) {
+  try {
+    const log = await SG_BACKEND.get('reward_claims_log:' + customerId);
+    if (!Array.isArray(log) || log.length === 0) return false;
+    const latest = log[0]; /* newest first */
+    if (!latest || !latest.timestamp) return false;
+    const sameStamps = latest.stamps === stampsBeforeClaim;
+    const age = Date.now() - new Date(latest.timestamp).getTime();
+    return sameStamps && age < 30 * 1000;
+  } catch {
+    return false; /* if we can't check, allow — don't block on connectivity */
+  }
+}
+
+/**
+ * _dpRecordRewardClaimRemote(customerId, stampsBeforeClaim)  — V2.07D
+ * Appends a claim record to reward_claims_log:{customerId} in Firebase so
+ * other devices can detect the claim. Mirrors _spWriteStampTransaction.
+ */
+async function _dpRecordRewardClaimRemote(customerId, stampsBeforeClaim) {
+  const staffId       = getActiveStaffId() || 'UNKNOWN';
+  const transactionId = 'RCX-' + Date.now() + '-' + Math.random().toString(36).slice(2,6).toUpperCase();
+  const record = {
+    transactionId,
+    customerId,
+    staffId,
+    stamps: stampsBeforeClaim,
+    timestamp: new Date().toISOString()
+  };
+  try {
+    const existing = await SG_BACKEND.get('reward_claims_log:' + customerId);
+    const log = Array.isArray(existing) ? existing : [];
+    log.unshift(record); /* newest first */
+    await SG_BACKEND.set('reward_claims_log:' + customerId, log);
+  } catch (e) {
+    console.warn('[V2.07D] Failed to write reward claim transaction', e);
+  }
+  return record;
+}
 
 /* ================================================================
    V2.06C — SHARED CUSTOMER DATA ACCESS
@@ -2683,24 +2819,24 @@ async function handleScannedQR(rawText) {
   setScannerStatus('QR Detected', 'Validating…', 'Checking',
     'rgba(255,195,0,0.8)', 'rgba(255,195,0,0.75)', 'rgba(255,195,0,0.08)', 'rgba(255,195,0,0.22)');
 
-  stopScanLoop();
-  stopCamera();
-
   const result = await validateQRPayload(rawText);
 
   switch (result.status) {
 
     case 'corrupted':
+      stopScanLoop(); stopCamera();
       showQRFailure('corrupted');
       return;
 
     case 'invalid':
+      stopScanLoop(); stopCamera();
       showQRFailure('invalid', result.missing
         ? 'Missing: ' + result.missing.join(', ')
         : '');
       return;
 
     case 'tampered':
+      stopScanLoop(); stopCamera();
       showQRFailure('tampered',
         result.payload ? 'ID: ' + result.payload.customerId : '');
       return;
@@ -2712,19 +2848,37 @@ async function handleScannedQR(rawText) {
           detail = 'Issued: ' + new Date(result.issuedAt).toLocaleString();
         } catch {}
       }
+      stopScanLoop(); stopCamera();
       showQRFailure('expired', detail);
       return;
     }
 
     case 'ok': {
+      /* V2.07C — QR duplicate scan protection */
+      const scannedId = result.payload.customerId;
+      if (_dpCheckQRCooldown(scannedId)) {
+        setScannerStatus('Already Scanned', 'Customer Already Scanned', 'Duplicate',
+          '#A880F0', '#B898F8', 'rgba(100,60,180,0.1)', 'rgba(130,80,200,0.28)');
+        _showDuplicateToast('⚠️ Customer Already Scanned — please wait a moment before scanning again.');
+        /* Camera was never stopped for this path — just resume the loop */
+        scIsProcessingScan = false;
+        scScanLoopId = requestAnimationFrame(scanFrame);
+        return;
+      }
+      _dpRecordQRScan(scannedId);
+
+      /* Only stop the camera once we're committed to leaving the scanner */
+      stopScanLoop(); stopCamera();
+
       setScannerStatus('QR Validated', 'Loading customer…', 'Valid',
         '#2ED47A', '#2ED47A', 'rgba(46,212,122,0.1)', 'rgba(46,212,122,0.22)');
-      const customer = await clFindCustomerById(result.payload.customerId);
+      const customer = await clFindCustomerById(scannedId);
       showCustomerLookup(customer);
       return;
     }
 
     default:
+      stopScanLoop(); stopCamera();
       showQRFailure('corrupted');
   }
 }
@@ -3053,22 +3207,30 @@ function _renderStampHistory(transactions) {
 }
 
 /**
- * handleAwardStamp()  — V2.07A
- * 1. Fetches latest customer from Firebase
- * 2. Increments stamps
- * 3. Writes customer record
- * 4. Syncs passport progress
- * 5. Logs activity entry
- * 6. Updates UI
+ * handleAwardStamp()  — V2.07C
+ * Added: processing lock (button disabled immediately) +
+ *        Firebase 10-second duplicate stamp detection.
  */
 async function handleAwardStamp() {
   if (!_clActiveCustomerId) return;
   const btn     = document.getElementById('clAwardBtn');
   const btnText = document.getElementById('clAwardBtnText');
-  btn.disabled  = true;
-  btnText.textContent = 'Saving…';
+
+  /* V2.07C — Processing lock: disable immediately, ignore re-clicks */
+  if (btn.disabled) return;
+  btn.disabled = true;
+  btnText.textContent = '⏳ Processing…';
 
   try {
+    /* V2.07C — Firebase duplicate check: reject if stamp < 10s ago */
+    const isDuplicate = await _dpCheckStampDuplicate(_clActiveCustomerId);
+    if (isDuplicate) {
+      btnText.textContent = '⚠️ Duplicate Detected';
+      _showDuplicateToast('⚠️ Duplicate Stamp Attempt Detected — a stamp was already awarded in the last 10 seconds.');
+      setTimeout(() => { btnText.textContent = 'Award Stamp'; btn.disabled = false; }, 2500);
+      return;
+    }
+
     /* Step 1 — fetch latest */
     let customer = await SG_BACKEND.get('customers:' + _clActiveCustomerId);
     if (!customer) {
@@ -3117,12 +3279,15 @@ async function handleAwardStamp() {
 }
 
 /**
- * handleClaimReward()  — V2.07A
- * Resets stamp cycle, increments rewardsClaimed, syncs all collections.
+ * handleClaimReward()  — V2.07D
+ * Added: processing lock + 30-second same-cycle duplicate guard (local + Firebase).
  */
 async function handleClaimReward() {
   if (!_clActiveCustomerId) return;
   const btn    = document.getElementById('clClaimBtn');
+
+  /* V2.07C — Processing lock */
+  if (btn.disabled) return;
   btn.disabled = true;
   btn.innerHTML = '<span aria-hidden="true">⏳</span> Processing…';
 
@@ -3134,7 +3299,20 @@ async function handleClaimReward() {
       return;
     }
 
-    customer.stamps         = (customer.stamps || 0) % 5;
+    const stampsNow = customer.stamps || 0;
+
+    /* V2.07C/D — Reward duplicate guard: same customer + same stamp total within 30s.
+       Checks both the local fingerprint (fast path) and the shared Firebase
+       log (cross-device protection). */
+    if (_dpCheckRewardDuplicate(_clActiveCustomerId, stampsNow) ||
+        await _dpCheckRewardDuplicateRemote(_clActiveCustomerId, stampsNow)) {
+      btn.innerHTML = '⚠️ Already Claimed';
+      _showDuplicateToast('⚠️ Duplicate Reward Claim Detected — this reward was already claimed just now.');
+      setTimeout(() => { btn.disabled = false; btn.innerHTML = '<span aria-hidden="true">🎁</span> Claim Free Reward'; }, 2500);
+      return;
+    }
+
+    customer.stamps         = stampsNow % 5;
     customer.rewardsClaimed = (customer.rewardsClaimed || 0) + 1;
     customer.rewardStatus   = _deriveRewardStatus(customer.stamps, customer.rewardsClaimed);
     customer.updatedAt      = new Date().toISOString();
@@ -3146,6 +3324,10 @@ async function handleClaimReward() {
         'Free Shumai Reward Claimed! ✅',
         `Reward #${customer.rewardsClaimed} claimed. Enjoy your Shumai!`)
     ]);
+
+    /* V2.07C/D — Record claim fingerprint AFTER successful write (local + remote) */
+    _dpRecordRewardClaim(_clActiveCustomerId, stampsNow);
+    await _dpRecordRewardClaimRemote(_clActiveCustomerId, stampsNow);
 
     const cache = clLoadCustomersCache();
     const idx   = cache.findIndex(c => c.customerId === _clActiveCustomerId);
@@ -3163,8 +3345,7 @@ async function handleClaimReward() {
 }
 
 /**
-/**
- * handleManualIdLookup()  — V2.07B
+ * handleManualIdLookup()  — V2.07D
  * Staff types a customer ID directly and looks it up in Firebase.
  */
 async function handleManualIdLookup() {
@@ -3182,6 +3363,14 @@ async function handleManualIdLookup() {
 
   const customerId = raw.toUpperCase().startsWith('SG-') ? raw.toUpperCase() : 'SG-' + raw.toUpperCase();
 
+  /* V2.07D — QR cooldown guard also applies to manual lookups */
+  if (_dpCheckQRCooldown(customerId)) {
+    msgEl.textContent = '⚠️ Customer Already Scanned — please wait a moment.';
+    msgEl.style.display = 'block';
+    _showDuplicateToast('⚠️ Customer Already Scanned — wait before scanning again.');
+    return;
+  }
+
   setScannerStatus('Looking Up…', customerId, 'Checking',
     'rgba(255,195,0,0.8)', 'rgba(255,195,0,0.75)',
     'rgba(255,195,0,0.08)', 'rgba(255,195,0,0.22)');
@@ -3196,6 +3385,7 @@ async function handleManualIdLookup() {
       return;
     }
     input.value = '';
+    _dpRecordQRScan(customerId); /* V2.07C — track manual lookups for duplicate guard */
     showCustomerLookup(customer);
   } catch(e) {
     console.error('[ManualLookup] Error:', e);
@@ -3222,6 +3412,31 @@ function escapeHtml(str) {
   return String(str)
     .replace(/&/g,'&amp;').replace(/</g,'&lt;')
     .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/**
+ * _showDuplicateToast(msg)  — V2.07C
+ * Displays a duplicate-protection warning using the existing toast element.
+ * Styled in amber to distinguish it from the generic "coming soon" toast.
+ */
+let _dpToastTimer = null;
+function _showDuplicateToast(msg) {
+  const toast = document.getElementById('spToast');
+  toast.textContent = msg;
+  toast.style.background    = 'rgba(180,100,0,0.96)';
+  toast.style.borderColor   = 'rgba(255,180,0,0.35)';
+  toast.style.color         = '#FFE8A0';
+  toast.classList.add('is-visible');
+  if (_dpToastTimer) clearTimeout(_dpToastTimer);
+  _dpToastTimer = setTimeout(() => {
+    toast.classList.remove('is-visible');
+    /* Reset styles after fade so showComingSoon still works */
+    setTimeout(() => {
+      toast.style.background  = '';
+      toast.style.borderColor = '';
+      toast.style.color       = '';
+    }, 300);
+  }, 3200);
 }
 
 let toastTimer = null;
