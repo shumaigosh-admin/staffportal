@@ -1,0 +1,2379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shumai-Gosh! — Staff Portal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<!-- V2.06C: QR decoding library -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsqr/1.4.0/jsQR.js"></script>
+<style>
+
+/* ============================================================
+   DESIGN SYSTEM TOKENS
+   ============================================================ */
+:root {
+  --sg-pink-light:   #FCEAEA;
+  --sg-pink:         #F2849E;
+  --sg-pink-deep:    #E05580;
+  --sg-pink-glow:    rgba(242,132,158,0.22);
+  --sg-brown:        #4A2112;
+  --sg-brown-mid:    #7B3F1E;
+  --sg-cream:        #FFF5F0;
+  --sg-font-display: 'Fredoka One', cursive;
+  --sg-font-body:    'Nunito', sans-serif;
+  --sg-radius-sm:    10px;
+  --sg-radius-md:    18px;
+  --sg-radius-lg:    26px;
+  --sg-radius-xl:    36px;
+  --sg-radius-pill:  999px;
+  --sg-shadow-card:  0 28px 72px rgba(224,85,128,0.38), 0 8px 28px rgba(74,33,18,0.2), 0 2px 6px rgba(224,85,128,0.12);
+  --sg-error:        #D63060;
+  --sg-error-bg:     #FFF0F4;
+  --sg-error-border: rgba(214,48,96,0.45);
+  --sg-success:      #1C8C5E;
+  --sg-success-bg:   #F0FBF6;
+  --sg-success-border: rgba(28,140,94,0.4);
+
+  /* Staff Portal accent */
+  --sp-bg-1:         #1E1208;
+  --sp-bg-2:         #2E1C0E;
+  --sp-accent:       #E05580;
+  --sp-gold:         #FFC300;
+  --sp-gold-deep:    #D4970A;
+  --sp-panel-bg:     rgba(255,255,255,0.06);
+  --sp-panel-border: rgba(255,200,180,0.12);
+  --sp-text-light:   rgba(255,240,235,0.92);
+  --sp-text-soft:    rgba(255,200,180,0.45);
+  --sp-stripe-a:     #E05580;
+  --sp-stripe-b:     #1E1208;
+}
+
+/* ============================================================
+   RESET & BASE
+   ============================================================ */
+*,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+html { font-size:16px; -webkit-font-smoothing:antialiased; }
+body {
+  background: linear-gradient(160deg, var(--sp-bg-1) 0%, var(--sp-bg-2) 55%, #3A1808 100%);
+  min-height: 100dvh;
+  font-family: var(--sg-font-body);
+  color: var(--sp-text-light);
+  overflow-x: hidden;
+}
+
+/* ============================================================
+   BACKGROUND
+   ============================================================ */
+.sp-bg-dots {
+  position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  background-image: radial-gradient(circle, rgba(242,132,158,0.07) 1.5px, transparent 1.5px);
+  background-size: 22px 22px;
+}
+.sp-bg-glow {
+  position: fixed; pointer-events: none; z-index: 0;
+  width: 520px; height: 520px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(224,85,128,0.14) 0%, transparent 70%);
+  top: -120px; left: 50%; transform: translateX(-50%);
+}
+
+/* ============================================================
+   TOP STRIPE BAR
+   ============================================================ */
+.sp-stripe-bar {
+  position: fixed; top: 0; left: 0; right: 0; height: 5px;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--sp-stripe-a) 0px, var(--sp-stripe-a) 18px,
+    var(--sp-stripe-b) 18px, var(--sp-stripe-b) 36px
+  );
+  z-index: 100;
+}
+
+/* ============================================================
+   VIEW SYSTEM (same pattern as customer app)
+   ============================================================ */
+.sp-view {
+  display: none;
+  position: relative; z-index: 1;
+  min-height: 100dvh;
+  flex-direction: column; align-items: center;
+  padding: 14px 20px 80px;
+  max-width: 480px; margin: 0 auto;
+}
+.sp-view.is-active {
+  display: flex;
+  animation: view-in 0.4s cubic-bezier(0.34,1.56,0.64,1) both;
+}
+@keyframes view-in {
+  from { opacity:0; transform:translateY(18px) scale(0.98); }
+  to   { opacity:1; transform:translateY(0)    scale(1); }
+}
+
+/* ============================================================
+   TOP BAR
+   ============================================================ */
+.sp-topbar {
+  width: 100%; display: flex; align-items: center;
+  justify-content: space-between; padding: 12px 0 0;
+}
+.sp-topbar__logo-text { display: flex; flex-direction: column; line-height: 1; }
+.sp-topbar__line1 {
+  font-family: var(--sg-font-display); font-size: 20px;
+  color: var(--sg-pink-deep); letter-spacing: 0.02em;
+  text-shadow: 2px 2px 0 rgba(224,85,128,0.35);
+}
+.sp-topbar__line2 {
+  font-family: var(--sg-font-display); font-size: 20px;
+  color: rgba(255,220,200,0.9); letter-spacing: 0.02em;
+}
+.sp-topbar__badge {
+  font-family: var(--sg-font-body); font-size: 10.5px; font-weight: 800;
+  color: var(--sp-bg-1);
+  background: linear-gradient(135deg, var(--sp-gold), var(--sp-gold-deep));
+  padding: 5px 12px; border-radius: var(--sg-radius-pill);
+  box-shadow: 0 3px 10px rgba(200,130,0,0.45); letter-spacing: 0.05em;
+}
+
+/* ============================================================
+   HERO
+   ============================================================ */
+.sp-hero {
+  width: 100%; text-align: center;
+  padding: 28px 0 10px;
+  animation: pop-in 0.7s cubic-bezier(0.34,1.56,0.64,1) both;
+}
+@keyframes pop-in {
+  from { opacity:0; transform:scale(0.88) translateY(20px); }
+  to   { opacity:1; transform:scale(1)    translateY(0); }
+}
+.sp-hero__eyebrow {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11px; font-weight: 800; letter-spacing: 0.18em;
+  text-transform: uppercase; color: var(--sp-gold);
+  margin-bottom: 14px; padding: 5px 14px;
+  border: 1.5px solid rgba(255,195,0,0.22); border-radius: var(--sg-radius-pill);
+  background: rgba(255,195,0,0.07);
+}
+.sp-hero__title {
+  font-family: var(--sg-font-display);
+  font-size: clamp(28px,8vw,40px); line-height: 1.05;
+  color: #fff; margin-bottom: 8px;
+  text-shadow: 3px 3px 0 rgba(0,0,0,0.35), 0 0 40px rgba(242,132,158,0.2);
+}
+.sp-hero__title .accent { color: var(--sg-pink-deep); }
+.sp-hero__subtitle {
+  font-size: 13.5px; font-weight: 700; color: var(--sp-text-soft);
+  letter-spacing: 0.02em; line-height: 1.5;
+}
+
+/* ============================================================
+   MASCOT
+   ============================================================ */
+.sp-mascot-wrap {
+  display: flex; justify-content: center; padding: 14px 0 4px;
+  animation: pop-in 0.7s cubic-bezier(0.34,1.56,0.64,1) 0.1s both;
+}
+.sp-mascot-circle {
+  width: 80px; height: 80px; border-radius: 50%;
+  background: linear-gradient(145deg, #2E1C0E, #3D220E);
+  border: 2.5px solid rgba(255,195,0,0.28);
+  box-shadow: 0 4px 24px rgba(224,85,128,0.35), 0 0 0 4px rgba(255,195,0,0.06), inset 0 1px 0 rgba(255,255,255,0.1);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 38px;
+}
+
+/* ============================================================
+   LOGIN CARD
+   ============================================================ */
+.sp-card {
+  width: 100%;
+  background: rgba(255,255,255,0.05);
+  border: 1.5px solid rgba(255,200,180,0.14);
+  border-radius: var(--sg-radius-lg);
+  padding: 28px 24px 26px;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.5), 0 8px 28px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08);
+  backdrop-filter: blur(20px);
+  margin-top: 6px;
+  animation: pop-in 0.75s cubic-bezier(0.34,1.56,0.64,1) 0.2s both;
+  position: relative; overflow: hidden;
+}
+.sp-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px;
+  background: linear-gradient(90deg, var(--sg-pink-deep), var(--sp-gold), var(--sg-pink-deep));
+  border-radius: var(--sg-radius-lg) var(--sg-radius-lg) 0 0;
+}
+.sp-card__heading {
+  font-family: var(--sg-font-display); font-size: 22px;
+  color: #fff; text-align: center; margin-bottom: 4px; padding-top: 8px;
+}
+.sp-card__subhead {
+  font-size: 12px; font-weight: 700; color: var(--sp-text-soft);
+  text-align: center; letter-spacing: 0.04em; margin-bottom: 24px;
+}
+
+/* ============================================================
+   FIELDS
+   ============================================================ */
+.sg-field { margin-bottom: 18px; }
+.sg-field:last-of-type { margin-bottom: 24px; }
+.sg-field__label {
+  display: block; font-size: 12px; font-weight: 800;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  color: rgba(255,200,180,0.6); margin-bottom: 7px;
+}
+.sg-field__input-wrap { position: relative; display: flex; align-items: center; }
+.sg-field__icon {
+  position: absolute; left: 14px; font-size: 16px;
+  pointer-events: none; z-index: 2; line-height: 1;
+}
+.sg-field__input {
+  width: 100%; height: 52px; padding: 0 44px 0 44px;
+  font-family: var(--sg-font-body); font-size: 15px; font-weight: 700;
+  color: #fff;
+  background: rgba(255,255,255,0.07);
+  border: 2px solid rgba(255,200,180,0.18);
+  border-radius: var(--sg-radius-md); outline: none;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+  -webkit-appearance: none;
+}
+.sg-field__input::placeholder { color: rgba(255,200,180,0.25); font-weight: 600; font-size: 14px; }
+.sg-field__input:focus {
+  border-color: var(--sg-pink-deep);
+  background: rgba(255,255,255,0.1);
+  box-shadow: 0 0 0 4px rgba(224,85,128,0.18), 0 2px 12px rgba(224,85,128,0.15);
+}
+.sg-field--error .sg-field__input {
+  border-color: var(--sg-error-border);
+  background: rgba(214,48,96,0.1);
+  box-shadow: 0 0 0 3px rgba(214,48,96,0.12);
+}
+.sg-field--error .sg-field__input:focus {
+  border-color: var(--sg-error);
+  box-shadow: 0 0 0 4px rgba(214,48,96,0.16);
+}
+.sg-field--valid .sg-field__input {
+  border-color: rgba(28,140,94,0.5);
+  background: rgba(28,140,94,0.08);
+}
+.sg-field--valid .sg-field__input:focus {
+  border-color: var(--sg-success);
+  box-shadow: 0 0 0 4px rgba(28,140,94,0.14);
+}
+.sg-field--locked .sg-field__input {
+  opacity: 0.45; cursor: not-allowed;
+}
+.sg-field__status {
+  position: absolute; right: 14px; font-size: 16px;
+  pointer-events: none; opacity: 0; transition: opacity 0.18s ease;
+}
+.sg-field--error .sg-field__status,
+.sg-field--valid .sg-field__status { opacity: 1; }
+.sg-field__msg {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 11.5px; font-weight: 700;
+  margin-top: 6px; min-height: 16px;
+  opacity: 0; transform: translateY(-4px);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.sg-field--error .sg-field__msg,
+.sg-field--valid .sg-field__msg { opacity: 1; transform: translateY(0); }
+.sg-field--error .sg-field__msg { color: #F47098; }
+.sg-field--valid .sg-field__msg  { color: #4CC99A; }
+.sg-field__msg-icon { font-size: 13px; }
+.sg-field__eye-btn {
+  position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+  background: transparent; border: none; cursor: pointer;
+  font-size: 16px; padding: 4px; z-index: 3; line-height: 1;
+  color: rgba(255,200,180,0.4); transition: color 0.15s ease;
+}
+.sg-field__eye-btn:hover { color: rgba(255,200,180,0.7); }
+.sg-field__input--with-eye { padding-right: 44px; }
+.sg-field__prefix {
+  position: absolute; left: 44px;
+  font-size: 14px; font-weight: 700;
+  color: rgba(255,200,180,0.4);
+  pointer-events: none; z-index: 2; user-select: none;
+}
+.sg-field__input--with-prefix { padding-left: 86px; }
+
+/* ============================================================
+   ROLE SELECTOR
+   ============================================================ */
+.sp-role-label {
+  display: block; font-size: 12px; font-weight: 800;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  color: rgba(255,200,180,0.6); margin-bottom: 10px;
+}
+.sp-role-grid {
+  display: grid; grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px; margin-bottom: 20px;
+}
+.sp-role-btn {
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  padding: 12px 8px 10px;
+  background: rgba(255,255,255,0.05);
+  border: 2px solid rgba(255,200,180,0.15);
+  border-radius: var(--sg-radius-md); cursor: pointer;
+  transition: border-color 0.18s ease, background 0.18s ease, transform 0.15s ease;
+  -webkit-appearance: none;
+}
+.sp-role-btn:hover {
+  background: rgba(255,255,255,0.09);
+  border-color: rgba(255,200,180,0.28);
+  transform: translateY(-1px);
+}
+.sp-role-btn.is-selected {
+  background: rgba(224,85,128,0.15);
+  border-color: var(--sg-pink-deep);
+  box-shadow: 0 0 0 3px rgba(224,85,128,0.15);
+}
+.sp-role-btn__icon  { font-size: 22px; }
+.sp-role-btn__label { font-family: var(--sg-font-display); font-size: 13px; color: #fff; line-height: 1; }
+.sp-role-btn__desc  { font-size: 10.5px; font-weight: 700; color: rgba(255,200,180,0.38); line-height: 1.3; text-align: center; }
+.sp-role-btn.is-selected .sp-role-btn__desc { color: rgba(255,200,180,0.6); }
+
+/* ============================================================
+   DIVIDER
+   ============================================================ */
+.sp-divider {
+  display: flex; align-items: center; gap: 10px;
+  margin: 2px 0 18px;
+}
+.sp-divider__line { flex: 1; height: 1px; background: rgba(255,200,180,0.1); }
+.sp-divider__text {
+  font-size: 10.5px; font-weight: 800; letter-spacing: 0.12em;
+  text-transform: uppercase; color: rgba(255,200,180,0.25);
+}
+
+/* ============================================================
+   LOGIN BUTTON
+   ============================================================ */
+.sp-login-btn {
+  width: 100%; height: 56px;
+  font-family: var(--sg-font-display); font-size: 19px;
+  letter-spacing: 0.03em; color: #fff;
+  background: linear-gradient(135deg, var(--sg-pink-deep) 0%, var(--sg-pink) 100%);
+  border: none; border-radius: var(--sg-radius-md); cursor: pointer;
+  box-shadow: 0 6px 24px rgba(224,85,128,0.45), 0 2px 8px rgba(224,85,128,0.25), inset 0 1px 0 rgba(255,255,255,0.22);
+  transition: transform 0.15s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.15s ease, opacity 0.15s ease;
+  position: relative; overflow: hidden;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.sp-login-btn::before {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(255,255,255,0.18) 0%, transparent 60%);
+  pointer-events: none;
+}
+.sp-login-btn:hover { transform: translateY(-2px) scale(1.01); box-shadow: 0 12px 36px rgba(224,85,128,0.55); }
+.sp-login-btn:active { transform: translateY(1px) scale(0.98); }
+.sp-login-btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+.sp-login-btn__spinner {
+  display: none; width: 18px; height: 18px;
+  border: 2.5px solid rgba(255,255,255,0.3);
+  border-top-color: #fff; border-radius: 50%;
+  animation: spin 0.7s linear infinite; flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.sp-login-btn.is-loading .sp-login-btn__spinner { display: block; }
+.sp-login-btn.is-loading .sp-login-btn__text { opacity: 0.6; }
+
+/* ============================================================
+   ALERT & LOCKOUT
+   ============================================================ */
+.sp-alert {
+  display: flex; align-items: flex-start; gap: 10px;
+  background: rgba(214,48,96,0.12);
+  border: 1.5px solid rgba(214,48,96,0.3);
+  border-radius: var(--sg-radius-md); padding: 12px 14px;
+  margin-bottom: 18px;
+  opacity: 0; max-height: 0; overflow: hidden;
+  transition: opacity 0.2s ease, max-height 0.25s ease, margin-bottom 0.2s ease;
+}
+.sp-alert.is-visible { opacity: 1; max-height: 100px; }
+.sp-alert__icon  { font-size: 18px; flex-shrink: 0; line-height: 1.3; }
+.sp-alert__body  { flex: 1; }
+.sp-alert__title { font-size: 13px; font-weight: 800; color: #F47098; margin-bottom: 2px; }
+.sp-alert__msg   { font-size: 12px; font-weight: 700; color: rgba(244,112,152,0.8); line-height: 1.45; }
+.sp-lockout {
+  display: none; align-items: flex-start; gap: 10px;
+  background: rgba(214,48,96,0.12);
+  border: 1.5px solid rgba(214,48,96,0.3);
+  border-radius: var(--sg-radius-md); padding: 14px; margin-bottom: 18px;
+}
+.sp-lockout.is-visible { display: flex; }
+.sp-lockout__icon  { font-size: 22px; flex-shrink: 0; }
+.sp-lockout__body  { flex: 1; }
+.sp-lockout__title { font-size: 13px; font-weight: 800; color: #F47098; margin-bottom: 3px; }
+.sp-lockout__msg   { font-size: 12px; font-weight: 700; color: rgba(244,112,152,0.75); line-height: 1.45; }
+.sp-lockout__timer { margin-top: 6px; font-size: 12px; font-weight: 800; color: rgba(244,112,152,0.6); letter-spacing: 0.03em; }
+
+/* ============================================================
+   FOOTER & SECURITY BADGE
+   ============================================================ */
+.sp-footer-note {
+  text-align: center; font-size: 11px; font-weight: 600;
+  color: rgba(255,200,180,0.25); margin-top: 22px; line-height: 1.55;
+}
+.sp-footer-note strong { color: rgba(255,200,180,0.4); }
+.sp-security-badge {
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  margin-top: 20px; font-size: 11px; font-weight: 800; letter-spacing: 0.06em;
+  color: rgba(255,200,180,0.25); text-transform: uppercase;
+}
+.sp-security-badge__icon { font-size: 14px; }
+
+/* ============================================================
+   DASHBOARD — IDENTITY CARD
+   ============================================================ */
+.sp-identity {
+  width: 100%; margin-top: 22px;
+  background: rgba(255,255,255,0.06);
+  border: 1.5px solid rgba(255,200,180,0.14);
+  border-radius: var(--sg-radius-lg);
+  padding: 22px 24px 20px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.07);
+  backdrop-filter: blur(16px);
+  position: relative; overflow: hidden;
+}
+.sp-identity::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px;
+  background: linear-gradient(90deg, var(--sg-pink-deep), var(--sp-gold), var(--sg-pink-deep));
+}
+.sp-identity__eyebrow {
+  font-size: 10px; font-weight: 800; letter-spacing: 0.18em;
+  text-transform: uppercase; color: var(--sp-gold);
+  margin-bottom: 12px; display: flex; align-items: center; gap: 6px;
+}
+.sp-identity__row { display: flex; align-items: center; gap: 16px; }
+.sp-identity__avatar {
+  width: 56px; height: 56px; border-radius: 50%; flex-shrink: 0;
+  background: linear-gradient(145deg, #2E1C0E, #3D220E);
+  border: 2px solid rgba(255,195,0,0.28);
+  box-shadow: 0 4px 16px rgba(224,85,128,0.3), inset 0 1px 0 rgba(255,255,255,0.08);
+  display: flex; align-items: center; justify-content: center; font-size: 26px;
+}
+.sp-identity__info { flex: 1; min-width: 0; }
+.sp-identity__name {
+  font-family: var(--sg-font-display); font-size: 22px;
+  color: #fff; line-height: 1.1; margin-bottom: 4px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.sp-identity__meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sp-identity__id   { font-size: 11.5px; font-weight: 800; color: var(--sp-text-soft); letter-spacing: 0.06em; }
+.sp-identity__role-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 10.5px; font-weight: 800; letter-spacing: 0.06em;
+  text-transform: uppercase; padding: 3px 10px; border-radius: var(--sg-radius-pill);
+}
+.sp-identity__role-badge--cashier {
+  background: rgba(224,85,128,0.18); color: #F2849E;
+  border: 1px solid rgba(224,85,128,0.3);
+}
+.sp-identity__role-badge--manager {
+  background: rgba(255,195,0,0.15); color: var(--sp-gold);
+  border: 1px solid rgba(255,195,0,0.25);
+}
+.sp-identity__role-badge--admin {
+  background: rgba(100,180,255,0.15); color: #7EC8FF;
+  border: 1px solid rgba(100,180,255,0.28);
+}
+
+/* ============================================================
+   DASHBOARD — SECTION LABEL & ACTION GRID
+   ============================================================ */
+.sp-section-label {
+  width: 100%; font-size: 10.5px; font-weight: 800;
+  letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--sp-text-soft); margin: 26px 0 12px;
+}
+.sp-action-grid {
+  width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+}
+.sp-action-card {
+  background: rgba(255,255,255,0.05);
+  border: 1.5px solid rgba(255,200,180,0.12);
+  border-radius: var(--sg-radius-md);
+  padding: 20px 16px 18px;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 10px;
+  cursor: pointer; position: relative; overflow: hidden;
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.15s ease;
+  text-align: left;
+}
+.sp-action-card:hover {
+  background: rgba(255,255,255,0.09);
+  border-color: rgba(255,200,180,0.26);
+  transform: translateY(-2px);
+}
+.sp-action-card:active { transform: translateY(0) scale(0.98); }
+.sp-action-card--locked { opacity: 0.38; cursor: not-allowed; }
+.sp-action-card--locked.is-unlocked { opacity: 1; cursor: pointer; }
+.sp-action-card__icon {
+  width: 44px; height: 44px; border-radius: var(--sg-radius-sm);
+  display: flex; align-items: center; justify-content: center; font-size: 22px;
+  background: rgba(255,255,255,0.07); border: 1px solid rgba(255,200,180,0.12);
+}
+.sp-action-card__label { font-family: var(--sg-font-display); font-size: 16px; color: #fff; line-height: 1.1; }
+.sp-action-card__desc  { font-size: 11px; font-weight: 700; color: var(--sp-text-soft); line-height: 1.4; }
+.sp-action-card__lock  { position: absolute; top: 10px; right: 10px; font-size: 13px; opacity: 0.5; }
+
+/* ============================================================
+   SIGN OUT BUTTON
+   ============================================================ */
+.sp-signout-btn {
+  width: 100%; height: 52px; margin-top: 32px;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  font-family: var(--sg-font-body); font-size: 14px; font-weight: 800;
+  letter-spacing: 0.04em; color: rgba(255,200,180,0.55);
+  background: transparent; border: 1.5px solid rgba(255,200,180,0.14);
+  border-radius: var(--sg-radius-md); cursor: pointer;
+  transition: color 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+.sp-signout-btn:hover {
+  color: rgba(255,200,180,0.82);
+  border-color: rgba(255,200,180,0.28);
+  background: rgba(255,200,180,0.05);
+}
+.sp-signout-btn:active { transform: scale(0.98); }
+
+/* ============================================================
+   COMING SOON TOAST
+   ============================================================ */
+.sp-toast {
+  position: fixed; bottom: 28px; left: 50%;
+  transform: translateX(-50%) translateY(12px);
+  z-index: 500;
+  display: inline-flex; align-items: center; gap: 8px;
+  background: rgba(46,28,14,0.96);
+  border: 1.5px solid rgba(255,200,180,0.18);
+  color: var(--sp-text-light);
+  font-family: var(--sg-font-body); font-size: 13px; font-weight: 800;
+  padding: 12px 22px; border-radius: var(--sg-radius-pill);
+  box-shadow: 0 8px 28px rgba(0,0,0,0.5);
+  white-space: nowrap;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.sp-toast.is-visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ============================================================
+   SHAKE
+   ============================================================ */
+@keyframes shake {
+  0%,100%{transform:translateX(0);}
+  18%{transform:translateX(-6px);}
+  36%{transform:translateX(6px);}
+  54%{transform:translateX(-5px);}
+  72%{transform:translateX(4px);}
+  88%{transform:translateX(-2px);}
+}
+
+/* ============================================================
+   ACCESS DENIED MODAL
+   ============================================================ */
+.sp-modal-backdrop {
+  position: fixed; inset: 0; z-index: 800;
+  background: rgba(14,7,2,0.72);
+  backdrop-filter: blur(6px);
+  display: flex; align-items: flex-end; justify-content: center;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.22s ease;
+}
+.sp-modal-backdrop.is-visible {
+  opacity: 1; pointer-events: all;
+}
+.sp-modal {
+  width: 100%; max-width: 480px;
+  background: linear-gradient(170deg, #2A1208 0%, #1E1208 100%);
+  border: 1.5px solid rgba(255,200,180,0.14);
+  border-bottom: none;
+  border-radius: var(--sg-radius-lg) var(--sg-radius-lg) 0 0;
+  padding: 28px 28px 40px;
+  box-shadow: 0 -20px 60px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.06);
+  transform: translateY(32px);
+  transition: transform 0.28s cubic-bezier(0.34,1.56,0.64,1);
+  position: relative; overflow: hidden;
+}
+.sp-modal-backdrop.is-visible .sp-modal {
+  transform: translateY(0);
+}
+.sp-modal::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px;
+  background: linear-gradient(90deg, #D63060, rgba(214,48,96,0.5), #D63060);
+}
+.sp-modal__drag {
+  width: 36px; height: 4px; border-radius: 2px;
+  background: rgba(255,200,180,0.18);
+  margin: 0 auto 20px;
+}
+.sp-modal__icon {
+  width: 60px; height: 60px; border-radius: 50%;
+  background: rgba(214,48,96,0.15);
+  border: 2px solid rgba(214,48,96,0.3);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 26px; margin: 0 auto 16px;
+}
+.sp-modal__title {
+  font-family: var(--sg-font-display); font-size: 24px;
+  color: #fff; text-align: center; margin-bottom: 8px;
+}
+.sp-modal__msg {
+  font-size: 13.5px; font-weight: 700;
+  color: rgba(255,200,180,0.55); text-align: center;
+  line-height: 1.55; margin-bottom: 6px;
+}
+.sp-modal__feature-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11px; font-weight: 800; letter-spacing: 0.08em;
+  text-transform: uppercase; color: rgba(214,48,96,0.8);
+  background: rgba(214,48,96,0.1); border: 1px solid rgba(214,48,96,0.2);
+  padding: 4px 14px; border-radius: var(--sg-radius-pill);
+  margin: 0 auto 20px; display: flex; justify-content: center;
+}
+.sp-modal__role-note {
+  font-size: 11.5px; font-weight: 700;
+  color: rgba(255,200,180,0.3); text-align: center;
+  margin-bottom: 24px; line-height: 1.5;
+}
+.sp-modal__close {
+  width: 100%; height: 50px;
+  font-family: var(--sg-font-display); font-size: 16px;
+  color: rgba(255,200,180,0.7);
+  background: rgba(255,255,255,0.06);
+  border: 1.5px solid rgba(255,200,180,0.16);
+  border-radius: var(--sg-radius-md); cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.sp-modal__close:hover {
+  background: rgba(255,255,255,0.1);
+  border-color: rgba(255,200,180,0.28);
+}
+
+/* ============================================================
+   PERMISSION BADGE ON LOCKED CARDS
+   ============================================================ */
+.sp-action-card__perm-note {
+  position: absolute; top: 8px; right: 8px;
+  font-size: 10px; font-weight: 800; letter-spacing: 0.08em;
+  text-transform: uppercase; color: rgba(214,48,96,0.7);
+  background: rgba(214,48,96,0.1);
+  border: 1px solid rgba(214,48,96,0.2);
+  padding: 2px 7px; border-radius: var(--sg-radius-pill);
+}
+
+/* ============================================================
+   V2.06A — SCANNER SCREEN
+   ============================================================ */
+
+/* ── Page wrapper ─────────────────────────────────────────── */
+.sc-page {
+  width: 100%; min-height: 100dvh;
+  display: flex; flex-direction: column; align-items: center;
+  padding-bottom: 48px;
+}
+
+/* ── Top-bar (reuses .sp-topbar token but scanner-specific) ── */
+.sc-topbar {
+  width: 100%; max-width: 480px;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 24px 8px;
+  flex-shrink: 0;
+}
+.sc-topbar__back {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 13px; font-weight: 800;
+  color: rgba(255,200,180,0.55);
+  background: none; border: none; cursor: pointer; padding: 6px 0;
+  transition: color 0.15s ease;
+}
+.sc-topbar__back:hover { color: rgba(255,200,180,0.85); }
+.sc-topbar__back__arrow { font-size: 16px; }
+.sc-topbar__title-block { text-align: right; }
+.sc-topbar__title {
+  font-family: var(--sg-font-display); font-size: 19px;
+  color: #fff; line-height: 1.1;
+}
+.sc-topbar__sub {
+  font-size: 11px; font-weight: 700;
+  color: var(--sp-text-soft); letter-spacing: 0.04em;
+}
+
+/* ── Content area ─────────────────────────────────────────── */
+.sc-content {
+  width: 100%; max-width: 480px;
+  flex: 1;
+  display: flex; flex-direction: column;
+  align-items: center; padding: 12px 24px 0;
+  gap: 24px;
+}
+
+/* ── Section label (reused style) ─────────────────────────── */
+.sc-section-label {
+  width: 100%; font-size: 10.5px; font-weight: 800;
+  letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--sp-text-soft); margin-bottom: -10px;
+}
+
+/* ── Viewfinder ───────────────────────────────────────────── */
+.sc-viewfinder {
+  position: relative;
+  width: min(280px, calc(100vw - 80px));
+  aspect-ratio: 1 / 1;
+  flex-shrink: 0;
+}
+
+/* Outer glow ring */
+.sc-viewfinder::before {
+  content: '';
+  position: absolute; inset: -14px;
+  border-radius: var(--sg-radius-lg);
+  background: radial-gradient(circle at center, rgba(224,85,128,0.10) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+/* Main dark frame */
+.sc-viewfinder__frame {
+  width: 100%; height: 100%;
+  background: rgba(8,4,2,0.82);
+  border: 1.5px solid rgba(255,200,180,0.14);
+  border-radius: var(--sg-radius-md);
+  position: relative; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* Subtle grid texture */
+.sc-viewfinder__frame::before {
+  content: '';
+  position: absolute; inset: 0;
+  background-image:
+    linear-gradient(rgba(255,200,180,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,200,180,0.03) 1px, transparent 1px);
+  background-size: 24px 24px;
+  pointer-events: none;
+}
+
+/* Scan line animation */
+.sc-viewfinder__scanline {
+  position: absolute; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    rgba(224,85,128,0.4) 20%,
+    rgba(224,85,128,0.9) 50%,
+    rgba(224,85,128,0.4) 80%,
+    transparent 100%
+  );
+  box-shadow: 0 0 12px rgba(224,85,128,0.6), 0 0 4px rgba(224,85,128,0.4);
+  top: 0;
+  animation: sc-scan 2.8s cubic-bezier(0.45,0,0.55,1) infinite;
+  opacity: 0.7;
+  pointer-events: none;
+}
+@keyframes sc-scan {
+  0%   { top: 8%;  opacity: 0; }
+  8%   {           opacity: 0.7; }
+  92%  {           opacity: 0.7; }
+  100% { top: 92%; opacity: 0; }
+}
+
+/* Placeholder inner content */
+.sc-viewfinder__body {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 10px; z-index: 1; pointer-events: none;
+}
+.sc-viewfinder__qr-icon {
+  font-size: 52px; opacity: 0.22;
+  filter: grayscale(1);
+}
+.sc-viewfinder__label {
+  font-size: 11px; font-weight: 800;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: rgba(255,200,180,0.28);
+}
+
+/* Corner brackets — 4 absolute divs */
+.sc-corner {
+  position: absolute; width: 22px; height: 22px;
+  pointer-events: none;
+}
+.sc-corner--tl { top: -1px;  left: -1px;
+  border-top: 3px solid var(--sp-accent);
+  border-left: 3px solid var(--sp-accent);
+  border-radius: var(--sg-radius-sm) 0 0 0;
+}
+.sc-corner--tr { top: -1px;  right: -1px;
+  border-top: 3px solid var(--sp-accent);
+  border-right: 3px solid var(--sp-accent);
+  border-radius: 0 var(--sg-radius-sm) 0 0;
+}
+.sc-corner--bl { bottom: -1px; left: -1px;
+  border-bottom: 3px solid var(--sp-accent);
+  border-left: 3px solid var(--sp-accent);
+  border-radius: 0 0 0 var(--sg-radius-sm);
+}
+.sc-corner--br { bottom: -1px; right: -1px;
+  border-bottom: 3px solid var(--sp-accent);
+  border-right: 3px solid var(--sp-accent);
+  border-radius: 0 0 var(--sg-radius-sm) 0;
+}
+
+/* ── Status area ──────────────────────────────────────────── */
+.sc-status {
+  width: 100%;
+  background: rgba(255,255,255,0.045);
+  border: 1.5px solid rgba(255,200,180,0.11);
+  border-radius: var(--sg-radius-md);
+  padding: 18px 20px;
+  display: flex; align-items: center; gap: 14px;
+}
+.sc-status__indicator {
+  width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+  background: #2ED47A;
+  box-shadow: 0 0 8px rgba(46,212,122,0.7);
+  animation: sc-pulse 2s ease-in-out infinite;
+}
+@keyframes sc-pulse {
+  0%, 100% { opacity: 1;   transform: scale(1);    }
+  50%       { opacity: 0.5; transform: scale(0.82); }
+}
+.sc-status__text { flex: 1; }
+.sc-status__title {
+  font-family: var(--sg-font-display); font-size: 16px;
+  color: #fff; line-height: 1.1; margin-bottom: 2px;
+}
+.sc-status__sub {
+  font-size: 11.5px; font-weight: 700;
+  color: var(--sp-text-soft);
+}
+.sc-status__badge {
+  font-size: 10px; font-weight: 800; letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #2ED47A; background: rgba(46,212,122,0.1);
+  border: 1px solid rgba(46,212,122,0.22);
+  padding: 3px 10px; border-radius: var(--sg-radius-pill);
+  white-space: nowrap;
+}
+
+/* ── Buttons ──────────────────────────────────────────────── */
+.sc-btn-primary {
+  width: 100%; height: 56px;
+  font-family: var(--sg-font-display); font-size: 19px;
+  color: #fff;
+  background: linear-gradient(135deg, var(--sp-accent) 0%, #C03060 100%);
+  border: none; border-radius: var(--sg-radius-md); cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  box-shadow: 0 8px 24px rgba(224,85,128,0.38), 0 2px 6px rgba(224,85,128,0.18);
+  transition: opacity 0.18s ease, transform 0.15s ease, box-shadow 0.18s ease;
+  position: relative; overflow: hidden;
+}
+.sc-btn-primary::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(255,255,255,0.12) 0%, transparent 60%);
+  pointer-events: none;
+}
+.sc-btn-primary:hover {
+  opacity: 0.92;
+  box-shadow: 0 12px 32px rgba(224,85,128,0.48), 0 4px 8px rgba(224,85,128,0.22);
+  transform: translateY(-1px);
+}
+.sc-btn-primary:active { transform: scale(0.98); box-shadow: none; }
+
+.sc-btn-back {
+  width: 100%; height: 50px;
+  font-family: var(--sg-font-body); font-size: 14px; font-weight: 800;
+  letter-spacing: 0.04em; color: rgba(255,200,180,0.55);
+  background: transparent;
+  border: 1.5px solid rgba(255,200,180,0.14);
+  border-radius: var(--sg-radius-md); cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  transition: color 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+.sc-btn-back:hover {
+  color: rgba(255,200,180,0.82);
+  border-color: rgba(255,200,180,0.28);
+  background: rgba(255,200,180,0.05);
+}
+.sc-btn-back:active { transform: scale(0.98); }
+
+/* ── Coming-soon notice (V2.06B placeholder) ─────────────── */
+.sc-future-notice {
+  width: 100%;
+  background: rgba(255,195,0,0.06);
+  border: 1.5px solid rgba(255,195,0,0.15);
+  border-radius: var(--sg-radius-md);
+  padding: 14px 18px;
+  display: flex; align-items: flex-start; gap: 10px;
+  display: none; /* hidden by default; shown on Start Scanner */
+}
+.sc-future-notice.is-visible { display: flex; }
+.sc-future-notice__icon { font-size: 18px; flex-shrink: 0; line-height: 1.2; }
+.sc-future-notice__text { font-size: 12px; font-weight: 700; color: rgba(255,195,0,0.65); line-height: 1.55; }
+.sc-future-notice__version {
+  display: inline-block; font-size: 10px; font-weight: 800; letter-spacing: 0.1em;
+  text-transform: uppercase; color: rgba(255,195,0,0.55);
+  background: rgba(255,195,0,0.08); border: 1px solid rgba(255,195,0,0.18);
+  padding: 2px 8px; border-radius: var(--sg-radius-pill); margin-top: 5px;
+}
+
+/* ── Camera permission denied notice (V2.06B) ────────────── */
+.sc-camera-error {
+  width: 100%;
+  background: rgba(214,48,96,0.1);
+  border: 1.5px solid rgba(214,48,96,0.28);
+  border-radius: var(--sg-radius-md);
+  padding: 14px 18px;
+  display: none;
+  align-items: flex-start; gap: 10px;
+}
+.sc-camera-error.is-visible { display: flex; }
+.sc-camera-error__icon { font-size: 18px; flex-shrink: 0; line-height: 1.2; }
+.sc-camera-error__text { font-size: 12px; font-weight: 700; color: #F47098; line-height: 1.55; }
+
+/* ── Live camera video feed ──────────────────────────────── */
+.sc-viewfinder__video {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  border-radius: var(--sg-radius-md);
+  display: none;
+  z-index: 0;
+}
+.sc-viewfinder__video.is-active { display: block; }
+.sc-viewfinder.is-camera-active .sc-viewfinder__frame { background: transparent; }
+.sc-viewfinder.is-camera-active .sc-viewfinder__body,
+.sc-viewfinder.is-camera-active .sc-viewfinder__frame::before { display: none; }
+
+/* ============================================================
+   V2.06C — CUSTOMER LOOKUP SCREEN
+   ============================================================ */
+
+/* ── Customer card ─────────────────────────────────────────── */
+.cl-card {
+  width: 100%;
+  background: rgba(255,255,255,0.06);
+  border: 1.5px solid rgba(255,200,180,0.14);
+  border-radius: var(--sg-radius-lg);
+  padding: 28px 24px 24px;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.07);
+  backdrop-filter: blur(16px);
+  position: relative; overflow: hidden;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  animation: pop-in 0.55s cubic-bezier(0.34,1.56,0.64,1) both;
+}
+.cl-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px;
+  background: linear-gradient(90deg, var(--sg-pink-deep), var(--sp-gold), var(--sg-pink-deep));
+}
+@keyframes pop-in {
+  from { opacity:0; transform:scale(0.9) translateY(16px); }
+  to   { opacity:1; transform:scale(1)    translateY(0); }
+}
+
+/* ── Photo / avatar ───────────────────────────────────────── */
+.cl-avatar {
+  width: 96px; height: 96px; border-radius: 50%; flex-shrink: 0;
+  background: linear-gradient(145deg, #2E1C0E, #3D220E);
+  border: 3px solid rgba(255,195,0,0.3);
+  box-shadow: 0 6px 24px rgba(224,85,128,0.32), inset 0 1px 0 rgba(255,255,255,0.1);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 44px; overflow: hidden; margin-bottom: 6px;
+}
+.cl-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
+
+/* ── Name & ID ────────────────────────────────────────────── */
+.cl-name {
+  font-family: var(--sg-font-display); font-size: 24px;
+  color: #fff; text-align: center; line-height: 1.15;
+  text-shadow: 2px 2px 0 rgba(0,0,0,0.3);
+}
+.cl-id {
+  font-size: 12px; font-weight: 800; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--sp-gold);
+  background: rgba(255,195,0,0.08); border: 1px solid rgba(255,195,0,0.2);
+  padding: 4px 14px; border-radius: var(--sg-radius-pill);
+  margin-top: 6px;
+}
+.cl-passport {
+  font-size: 11.5px; font-weight: 700; letter-spacing: 0.08em;
+  color: rgba(255,200,180,0.45); margin-top: 4px;
+}
+
+/* ── Stats row ────────────────────────────────────────────── */
+.cl-stats {
+  width: 100%; display: grid; grid-template-columns: 1fr 1fr;
+  gap: 12px; margin-top: 22px;
+}
+.cl-stat {
+  background: rgba(255,255,255,0.045);
+  border: 1.5px solid rgba(255,200,180,0.1);
+  border-radius: var(--sg-radius-md);
+  padding: 16px 14px; text-align: center;
+}
+.cl-stat__value {
+  font-family: var(--sg-font-display); font-size: 30px;
+  color: #fff; line-height: 1.1;
+}
+.cl-stat__label {
+  font-size: 10.5px; font-weight: 800; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--sp-text-soft);
+  margin-top: 4px;
+}
+
+/* ── Actions ──────────────────────────────────────────────── */
+.cl-actions {
+  width: 100%; display: flex; flex-direction: column; gap: 12px;
+  margin-top: 24px;
+}
+.cl-btn-award {
+  width: 100%; height: 56px;
+  font-family: var(--sg-font-display); font-size: 19px;
+  color: #fff;
+  background: linear-gradient(135deg, var(--sp-accent) 0%, #C03060 100%);
+  border: none; border-radius: var(--sg-radius-md); cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  box-shadow: 0 8px 24px rgba(224,85,128,0.38), 0 2px 6px rgba(224,85,128,0.18);
+  transition: opacity 0.18s ease, transform 0.15s ease, box-shadow 0.18s ease;
+  position: relative; overflow: hidden;
+}
+.cl-btn-award::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(255,255,255,0.12) 0%, transparent 60%);
+  pointer-events: none;
+}
+.cl-btn-award:not(:disabled):hover {
+  opacity: 0.92;
+  box-shadow: 0 12px 32px rgba(224,85,128,0.48), 0 4px 8px rgba(224,85,128,0.22);
+  transform: translateY(-1px);
+}
+.cl-btn-award:not(:disabled):active { transform: scale(0.98); box-shadow: none; }
+.cl-btn-award:disabled {
+  opacity: 0.4; cursor: not-allowed; box-shadow: none;
+}
+.cl-btn-award__note {
+  text-align: center; font-size: 11px; font-weight: 700;
+  color: rgba(255,200,180,0.35); letter-spacing: 0.04em; margin-top: -4px;
+}
+
+/* ── Scan again / back button ────────────────────────────── */
+.cl-btn-scan-again {
+  width: 100%; height: 50px;
+  font-family: var(--sg-font-body); font-size: 14px; font-weight: 800;
+  letter-spacing: 0.04em; color: rgba(255,200,180,0.55);
+  background: transparent;
+  border: 1.5px solid rgba(255,200,180,0.14);
+  border-radius: var(--sg-radius-md); cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  transition: color 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+.cl-btn-scan-again:hover {
+  color: rgba(255,200,180,0.82);
+  border-color: rgba(255,200,180,0.28);
+  background: rgba(255,200,180,0.05);
+}
+.cl-btn-scan-again:active { transform: scale(0.98); }
+
+/* ============================================================
+   V2.06C — CUSTOMER NOT FOUND
+   ============================================================ */
+.cl-notfound {
+  width: 100%;
+  background: rgba(214,48,96,0.08);
+  border: 1.5px solid rgba(214,48,96,0.25);
+  border-radius: var(--sg-radius-lg);
+  padding: 36px 24px;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  text-align: center;
+  animation: pop-in 0.55s cubic-bezier(0.34,1.56,0.64,1) both;
+}
+.cl-notfound__icon { font-size: 46px; line-height: 1; margin-bottom: 4px; }
+.cl-notfound__title {
+  font-family: var(--sg-font-display); font-size: 22px; color: #fff;
+}
+.cl-notfound__msg {
+  font-size: 12.5px; font-weight: 700; color: rgba(255,200,180,0.5);
+  line-height: 1.55; max-width: 280px;
+}
+
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:0.01ms !important;transition-duration:0.01ms !important;}
+}
+
+</style>
+</head>
+<body>
+
+<div class="sp-bg-dots" aria-hidden="true"></div>
+<div class="sp-bg-glow"  aria-hidden="true"></div>
+<div class="sp-stripe-bar" aria-hidden="true"></div>
+
+<!-- ================================================================
+     VIEW 1 — LOGIN
+     ================================================================ -->
+<div class="sp-view is-active" id="spViewLogin" role="main" aria-label="Staff Login">
+
+  <header class="sp-topbar" role="banner">
+    <div class="sp-topbar__logo-text">
+      <span class="sp-topbar__line1">Shumai-Gosh!</span>
+      <span class="sp-topbar__line2">Staff Portal</span>
+    </div>
+    <span class="sp-topbar__badge">STAFF</span>
+  </header>
+
+  <div class="sp-hero">
+    <div class="sp-hero__eyebrow">⚙️ Staff Access Only ⚙️</div>
+    <div class="sp-hero__title">Staff<br><span class="accent">Portal</span></div>
+    <p class="sp-hero__subtitle">Authorised personnel only.<br>Your session is tracked and secured.</p>
+  </div>
+
+  <div class="sp-mascot-wrap" aria-hidden="true">
+    <div class="sp-mascot-circle">🧑‍💼</div>
+  </div>
+
+  <section class="sp-card" aria-label="Staff login form">
+    <h2 class="sp-card__heading">Staff Sign In</h2>
+    <p class="sp-card__subhead">Select your role, then enter your username and password</p>
+
+    <div class="sp-alert" id="spLoginAlert" role="alert" aria-live="assertive" aria-atomic="true">
+      <span class="sp-alert__icon" aria-hidden="true">⚠️</span>
+      <div class="sp-alert__body">
+        <p class="sp-alert__title">Login Failed</p>
+        <p class="sp-alert__msg" id="spLoginAlertMsg">Incorrect Staff ID or password.</p>
+      </div>
+    </div>
+
+    <div class="sp-lockout" id="spLockoutBanner" role="alert" aria-live="assertive" aria-atomic="true">
+      <span class="sp-lockout__icon" aria-hidden="true">🔐</span>
+      <div class="sp-lockout__body">
+        <p class="sp-lockout__title">Access Temporarily Locked</p>
+        <p class="sp-lockout__msg">Too many failed attempts. Please wait before trying again.</p>
+        <div class="sp-lockout__timer">⏱ Try again in <strong id="spLockoutTimer">5m 00s</strong></div>
+      </div>
+    </div>
+
+    <span class="sp-role-label" id="spRoleLabel">Select Your Role</span>
+    <div class="sp-role-grid" role="group" aria-labelledby="spRoleLabel">
+      <button class="sp-role-btn is-selected" type="button"
+        data-role="cashier" id="spRoleCashier"
+        onclick="selectRole('cashier')"
+        aria-pressed="true" aria-label="Select role: Cashier">
+        <span class="sp-role-btn__icon" aria-hidden="true">🥟</span>
+        <span class="sp-role-btn__label">Cashier</span>
+        <span class="sp-role-btn__desc">Award stamps &amp;<br>redeem rewards</span>
+      </button>
+      <button class="sp-role-btn" type="button"
+        data-role="manager" id="spRoleManager"
+        onclick="selectRole('manager')"
+        aria-pressed="false" aria-label="Select role: Manager">
+        <span class="sp-role-btn__icon" aria-hidden="true">📊</span>
+        <span class="sp-role-btn__label">Manager</span>
+        <span class="sp-role-btn__desc">Reports &amp;<br>oversight</span>
+      </button>
+      <button class="sp-role-btn" type="button"
+        data-role="admin" id="spRoleAdmin"
+        onclick="selectRole('admin')"
+        aria-pressed="false" aria-label="Select role: Admin">
+        <span class="sp-role-btn__icon" aria-hidden="true">🛡️</span>
+        <span class="sp-role-btn__label">Admin</span>
+        <span class="sp-role-btn__desc">Full system<br>access</span>
+      </button>
+    </div>
+
+    <div class="sp-divider" aria-hidden="true">
+      <div class="sp-divider__line"></div>
+      <span class="sp-divider__text">Credentials</span>
+      <div class="sp-divider__line"></div>
+    </div>
+
+    <div class="sg-field" id="fieldStaffId">
+      <label class="sg-field__label" for="inputStaffId">Username</label>
+      <div class="sg-field__input-wrap">
+        <span class="sg-field__icon" aria-hidden="true">🪪</span>
+        <input class="sg-field__input"
+          id="inputStaffId" type="text" name="staffUsername"
+          placeholder="Enter your username" autocomplete="username"
+          autocorrect="off" autocapitalize="none" spellcheck="false"
+          maxlength="32" aria-required="true" aria-describedby="staffIdMsg"
+          oninput="onStaffIdInput()" onblur="onStaffIdBlur()">
+        <span class="sg-field__status" id="staffIdStatusIcon" aria-hidden="true"></span>
+      </div>
+      <div class="sg-field__msg" id="staffIdMsg" role="alert" aria-live="polite">
+        <span class="sg-field__msg-icon" id="staffIdMsgIcon"></span>
+        <span id="staffIdMsgText"></span>
+      </div>
+    </div>
+
+    <div class="sg-field sg-field--has-eye" id="fieldStaffPass">
+      <label class="sg-field__label" for="inputStaffPass">Password</label>
+      <div class="sg-field__input-wrap">
+        <span class="sg-field__icon" aria-hidden="true">🔒</span>
+        <input class="sg-field__input sg-field__input--with-eye"
+          id="inputStaffPass" type="password" name="staffPassword"
+          placeholder="Enter your password" autocomplete="current-password"
+          aria-required="true" aria-describedby="staffPassMsg"
+          oninput="onPassInput()" onblur="onPassBlur()"
+          onkeydown="if(event.key==='Enter')handleStaffLogin()">
+        <button class="sg-field__eye-btn" type="button" id="staffPassEyeBtn"
+          onclick="togglePassVisibility()"
+          aria-label="Toggle password visibility" tabindex="-1">👁</button>
+        <span class="sg-field__status" id="staffPassStatusIcon" aria-hidden="true"></span>
+      </div>
+      <div class="sg-field__msg" id="staffPassMsg" role="alert" aria-live="polite">
+        <span class="sg-field__msg-icon" id="staffPassMsgIcon"></span>
+        <span id="staffPassMsgText"></span>
+      </div>
+    </div>
+
+    <button class="sp-login-btn" id="spLoginBtn"
+      type="button" onclick="handleStaffLogin()"
+      aria-label="Sign in to the Staff Portal">
+      <span class="sp-login-btn__spinner" aria-hidden="true"></span>
+      <span class="sp-login-btn__text">🔑 &nbsp;Sign In</span>
+    </button>
+  </section>
+
+  <p class="sp-footer-note">
+    This portal is for <strong>Shumai-Gosh!</strong> staff only.<br>
+    Unauthorised access attempts are logged.
+  </p>
+  <div class="sp-security-badge" aria-hidden="true">
+    <span class="sp-security-badge__icon">🔐</span>
+    <span>Staff Session · Secured</span>
+  </div>
+
+</div>
+
+<!-- ================================================================
+     VIEW 2 — DASHBOARD
+     ================================================================ -->
+<div class="sp-view" id="spViewDashboard" role="main" aria-label="Staff Dashboard">
+
+  <header class="sp-topbar" role="banner">
+    <div class="sp-topbar__logo-text">
+      <span class="sp-topbar__line1">Shumai-Gosh!</span>
+      <span class="sp-topbar__line2">Staff Portal</span>
+    </div>
+    <span class="sp-topbar__badge">STAFF</span>
+  </header>
+
+  <div class="sp-identity" aria-label="Logged-in staff details">
+    <div class="sp-identity__eyebrow">⚙️ &nbsp;Active Session</div>
+    <div class="sp-identity__row">
+      <div class="sp-identity__avatar" aria-hidden="true" id="spStaffAvatar">🧑‍💼</div>
+      <div class="sp-identity__info">
+        <div class="sp-identity__name" id="spStaffName">—</div>
+        <div class="sp-identity__meta">
+          <span class="sp-identity__id" id="spStaffIdDisplay">SG-—</span>
+          <span class="sp-identity__role-badge sp-identity__role-badge--cashier" id="spRoleBadge">—</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sp-section-label">Quick Actions</div>
+  <div class="sp-action-grid" role="list">
+
+    <button class="sp-action-card" type="button"
+      data-feature="award_stamp"
+      onclick="handleFeatureClick(this, 'Award Stamp')"
+      aria-label="Open scanner to award a stamp to a customer">
+      <div class="sp-action-card__icon" aria-hidden="true">📷</div>
+      <div class="sp-action-card__label">Scan &amp; Stamp</div>
+      <div class="sp-action-card__desc">Open QR scanner</div>
+    </button>
+
+    <button class="sp-action-card" type="button"
+      data-feature="redeem_reward"
+      onclick="handleFeatureClick(this, 'Redeem Reward')"
+      aria-label="Redeem a customer reward">
+      <div class="sp-action-card__icon" aria-hidden="true">🎁</div>
+      <div class="sp-action-card__label">Redeem Reward</div>
+      <div class="sp-action-card__desc">Process a free siomai reward</div>
+    </button>
+
+    <button class="sp-action-card sp-action-card--locked" type="button"
+      id="spCardReports" data-feature="reports"
+      onclick="handleFeatureClick(this, 'Reports')"
+      aria-label="View reports">
+      <div class="sp-action-card__icon" aria-hidden="true">📊</div>
+      <div class="sp-action-card__label">Reports</div>
+      <div class="sp-action-card__desc">Sales &amp; stamp activity</div>
+      <span class="sp-action-card__lock" aria-hidden="true">🔒</span>
+    </button>
+
+    <button class="sp-action-card sp-action-card--locked" type="button"
+      id="spCardAdmin" data-feature="administration"
+      onclick="handleFeatureClick(this, 'Administration')"
+      aria-label="Administration tools">
+      <div class="sp-action-card__icon" aria-hidden="true">🛠️</div>
+      <div class="sp-action-card__label">Admin</div>
+      <div class="sp-action-card__desc">Customer accounts &amp; settings</div>
+      <span class="sp-action-card__lock" aria-hidden="true">🔒</span>
+    </button>
+
+  </div>
+
+  <button class="sp-signout-btn" type="button" onclick="handleSignOut()"
+    aria-label="Sign out of the Staff Portal">
+    🚪 &nbsp;Sign Out
+  </button>
+
+  <p class="sp-footer-note">
+    <strong>Shumai-Gosh!</strong> Staff Portal · Session secured<br>
+    Unauthorised access attempts are logged.
+  </p>
+
+</div>
+
+<!-- ================================================================
+     VIEW 3 — SCANNER
+     ================================================================ -->
+<div class="sp-view" id="spViewScanner" role="main" aria-label="Customer QR Scanner">
+  <div class="sc-page">
+
+    <!-- Top-bar -->
+    <header class="sc-topbar" role="banner">
+      <button class="sc-topbar__back" type="button"
+        onclick="closeScanner()" aria-label="Back to Dashboard">
+        <span class="sc-topbar__back__arrow" aria-hidden="true">‹</span>
+        Dashboard
+      </button>
+      <div class="sc-topbar__title-block">
+        <div class="sc-topbar__title">QR Scanner</div>
+        <div class="sc-topbar__sub">Customer Rewards Passport</div>
+      </div>
+    </header>
+
+    <div class="sc-content">
+
+      <!-- Section label -->
+      <div class="sc-section-label">Scanner Preview</div>
+
+      <!-- Viewfinder -->
+      <div class="sc-viewfinder" id="scViewfinder" role="img" aria-label="Scanner viewfinder — camera feed will appear here">
+        <div class="sc-viewfinder__frame">
+          <!-- Live camera feed -->
+          <video class="sc-viewfinder__video" id="scCameraVideo" autoplay playsinline muted aria-hidden="true"></video>
+          <!-- Scan line -->
+          <div class="sc-viewfinder__scanline" aria-hidden="true"></div>
+          <!-- Corner brackets -->
+          <div class="sc-corner sc-corner--tl" aria-hidden="true"></div>
+          <div class="sc-corner sc-corner--tr" aria-hidden="true"></div>
+          <div class="sc-corner sc-corner--bl" aria-hidden="true"></div>
+          <div class="sc-corner sc-corner--br" aria-hidden="true"></div>
+          <!-- Placeholder body -->
+          <div class="sc-viewfinder__body">
+            <span class="sc-viewfinder__qr-icon" aria-hidden="true">⬛</span>
+            <span class="sc-viewfinder__label">Scanner Preview</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Status area -->
+      <div class="sc-status" id="scStatus" role="status" aria-live="polite" aria-atomic="true">
+        <div class="sc-status__indicator" id="scStatusDot" aria-hidden="true"></div>
+        <div class="sc-status__text">
+          <div class="sc-status__title" id="scStatusTitle">Scanner Ready</div>
+          <div class="sc-status__sub"   id="scStatusSub">Waiting for QR Code</div>
+        </div>
+        <div class="sc-status__badge"   id="scStatusBadge">Ready</div>
+      </div>
+
+      <!-- Camera permission denied notice (V2.06B) -->
+      <div class="sc-camera-error" id="scCameraError" role="alert" aria-live="assertive">
+        <span class="sc-camera-error__icon" aria-hidden="true">⚠️</span>
+        <div class="sc-camera-error__text">
+          Camera access required.<br>Please allow camera permission.
+        </div>
+      </div>
+
+      <!-- Primary action -->
+      <button class="sc-btn-primary" type="button"
+        id="scStartBtn" onclick="handleStartScanner()"
+        aria-label="Start the QR scanner camera">
+        <span aria-hidden="true">📷</span>
+        Start Scanner
+      </button>
+
+      <!-- Back button -->
+      <button class="sc-btn-back" type="button"
+        onclick="closeScanner()" aria-label="Return to Staff Dashboard">
+        ← &nbsp;Back to Dashboard
+      </button>
+
+    </div><!-- /.sc-content -->
+
+    <p class="sp-footer-note" style="max-width:480px; margin-top:auto; padding:24px 24px 0;">
+      <strong>Shumai-Gosh!</strong> Staff Portal · Camera Integration V2.06B<br>
+      QR detection available in V2.06C.
+    </p>
+
+  </div><!-- /.sc-page -->
+</div>
+
+<!-- ================================================================
+     VIEW 4 — CUSTOMER LOOKUP  (V2.06C)
+     ================================================================ -->
+<div class="sp-view" id="spViewCustomerLookup" role="main" aria-label="Customer Lookup">
+  <div class="sc-page">
+
+    <!-- Top-bar -->
+    <header class="sc-topbar" role="banner">
+      <button class="sc-topbar__back" type="button"
+        onclick="closeCustomerLookup()" aria-label="Back to Scanner">
+        <span class="sc-topbar__back__arrow" aria-hidden="true">‹</span>
+        Scanner
+      </button>
+      <div class="sc-topbar__title-block">
+        <div class="sc-topbar__title">Customer</div>
+        <div class="sc-topbar__sub">Scan Result</div>
+      </div>
+    </header>
+
+    <div class="sc-content">
+
+      <!-- Found state -->
+      <div class="cl-card" id="clFoundCard" style="display:none;">
+        <div class="cl-avatar" id="clAvatar" aria-hidden="true">🥟</div>
+        <div class="cl-name" id="clName">—</div>
+        <div class="cl-id" id="clCustomerId">SG-—</div>
+        <div class="cl-passport" id="clPassportNumber">PASS-—</div>
+
+        <div class="cl-stats" role="group" aria-label="Customer stamp summary">
+          <div class="cl-stat">
+            <div class="cl-stat__value" id="clCurrentStamps">0</div>
+            <div class="cl-stat__label">Current Stamps</div>
+          </div>
+          <div class="cl-stat">
+            <div class="cl-stat__value" id="clRewardsClaimed">0</div>
+            <div class="cl-stat__label">Rewards Claimed</div>
+          </div>
+        </div>
+
+        <div class="cl-actions">
+          <button class="cl-btn-award" type="button" id="clAwardBtn" disabled
+            aria-label="Award stamp — coming in V2.07A">
+            <span aria-hidden="true">🏅</span>
+            Award Stamp
+          </button>
+          <p class="cl-btn-award__note">Available in V2.07A</p>
+          <button class="cl-btn-scan-again" type="button" onclick="closeCustomerLookup()"
+            aria-label="Return to scanner to scan another QR code">
+            ↻ &nbsp;Scan Another Customer
+          </button>
+        </div>
+      </div>
+
+      <!-- Not found state -->
+      <div class="cl-notfound" id="clNotFoundCard" style="display:none;">
+        <span class="cl-notfound__icon" aria-hidden="true">🔍</span>
+        <h2 class="cl-notfound__title">Customer Not Found</h2>
+        <p class="cl-notfound__msg">
+          We couldn't find a passport matching this QR code.
+          The customer may need to re-register or try presenting their QR again.
+        </p>
+        <button class="cl-btn-scan-again" type="button" onclick="closeCustomerLookup()"
+          style="margin-top:12px;" aria-label="Return to scanner to try again">
+          ↻ &nbsp;Scan Again
+        </button>
+      </div>
+
+    </div><!-- /.sc-content -->
+
+    <p class="sp-footer-note" style="max-width:480px; margin-top:auto; padding:24px 24px 0;">
+      <strong>Shumai-Gosh!</strong> Staff Portal · Customer Lookup V2.06C<br>
+      QR validation available in V2.06D.
+    </p>
+
+  </div><!-- /.sc-page -->
+</div>
+
+<!-- ================================================================
+     ACCESS DENIED MODAL
+     ================================================================ -->
+<div class="sp-modal-backdrop" id="spAccessDeniedModal"
+  role="dialog" aria-modal="true" aria-labelledby="spAccessDeniedTitle"
+  onclick="closeAccessDenied(event)">
+  <div class="sp-modal">
+    <div class="sp-modal__drag" aria-hidden="true"></div>
+    <div class="sp-modal__icon" aria-hidden="true">🚫</div>
+    <h2 class="sp-modal__title" id="spAccessDeniedTitle">Access Denied</h2>
+    <p class="sp-modal__msg">You do not have permission to access this feature.</p>
+    <div class="sp-modal__feature-pill" id="spDeniedFeaturePill">—</div>
+    <p class="sp-modal__role-note" id="spDeniedRoleNote">This feature is not available for your role.</p>
+    <button class="sp-modal__close" type="button" onclick="closeAccessDenied()">
+      Dismiss
+    </button>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="sp-toast" id="spToast" role="status" aria-live="polite" aria-atomic="true"></div>
+
+<script>
+/* ================================================================
+   STAFF PORTAL — SESSION NAMESPACE
+   Keys: sp_activeStaffId, sp_activeStaffRole
+   Completely separate from customer session (activeCustomerId).
+   ================================================================ */
+
+const SP_MAX_ATTEMPTS     = 5;
+const SP_LOCKOUT_MS       = 5 * 60 * 1000;
+const SP_STORAGE_KEY      = 'sg_staff_auth';
+const SP_SESSION_ID_KEY   = 'sp_activeStaffId';
+const SP_SESSION_ROLE_KEY = 'sp_activeStaffRole';
+
+/* ================================================================
+   V2.06C — SHARED CUSTOMER DATA ACCESS
+   Reads from the same shared backend + local cache used by the
+   Customer App (see index_V2_04E.html "V2.04A — ARCHITECTURE").
+   Staff Portal does NOT maintain a separate customer database.
+
+   Collections (shared=true):
+     customers:{customerId}  → customer record JSON
+   Local cache (offline fallback):
+     sg_cache_customers      → array of customer records
+   ================================================================ */
+const SG_BACKEND = {
+  async get(key) {
+    try { const r = await window.storage.get(key, true); return r ? JSON.parse(r.value) : null; }
+    catch { return null; }
+  },
+  async set(key, value) {
+    try { await window.storage.set(key, JSON.stringify(value), true); return true; }
+    catch { return false; }
+  },
+  async list(prefix) {
+    try { const r = await window.storage.list(prefix, true); return r ? r.keys : []; }
+    catch { return []; }
+  }
+};
+
+const CL_CACHE_CUSTOMERS = 'sg_cache_customers';
+
+function _clCacheGet(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } }
+function _clCacheSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+
+/** Read all cached customer records (local-first). */
+function clLoadCustomersCache() { return _clCacheGet(CL_CACHE_CUSTOMERS) || []; }
+
+/**
+ * clFindCustomerById(customerId)
+ * Looks up a customer record by ID — checks shared backend first
+ * (so newly-registered customers from other devices are found),
+ * falling back to local cache if the backend is unreachable.
+ * Returns the customer object, or null if not found anywhere.
+ */
+async function clFindCustomerById(customerId) {
+  if (!customerId) return null;
+
+  /* Try shared backend first */
+  try {
+    const fromBackend = await SG_BACKEND.get('customers:' + customerId);
+    if (fromBackend) {
+      /* Refresh local cache copy so other staff views stay in sync */
+      const cache = clLoadCustomersCache();
+      const idx   = cache.findIndex(c => c.customerId === customerId);
+      if (idx >= 0) cache[idx] = fromBackend; else cache.push(fromBackend);
+      _clCacheSet(CL_CACHE_CUSTOMERS, cache);
+      return fromBackend;
+    }
+  } catch {}
+
+  /* Fallback: local cache (offline) */
+  const cache = clLoadCustomersCache();
+  return cache.find(c => c.customerId === customerId) || null;
+}
+
+/* ================================================================
+   STAFF ROLE DEFINITIONS  (V2.05C — architecture)
+   Permission enforcement added in V2.05D.
+   ================================================================ */
+const STAFF_ROLES = {
+  cashier: {
+    label: 'Cashier',
+    icon: '🥟',
+    futurePermissions: ['scan_customer_qr', 'view_customer_passport', 'award_stamp']
+  },
+  manager: {
+    label: 'Manager',
+    icon: '📊',
+    futurePermissions: ['scan_customer_qr', 'view_customer_passport', 'award_stamp', 'view_reports']
+  },
+  admin: {
+    label: 'Admin',
+    icon: '🛡️',
+    futurePermissions: ['full_access']
+  }
+};
+
+/* ================================================================
+   ROLE PERMISSION MAP  (V2.05D — enforcement)
+   Defines which features each role may access.
+   Permissions are checked at runtime; restrictions are not cosmetic.
+   ================================================================ */
+const ROLE_PERMISSIONS = {
+  cashier: ['award_stamp', 'redeem_reward', 'scanner'],
+  manager: ['award_stamp', 'redeem_reward', 'scanner', 'reports'],
+  admin:   ['award_stamp', 'redeem_reward', 'scanner', 'reports', 'administration']
+};
+
+/* Feature display metadata */
+const FEATURE_META = {
+  award_stamp:    { label: 'Award Stamp',    minRole: 'cashier' },
+  redeem_reward:  { label: 'Redeem Reward',  minRole: 'cashier' },
+  scanner:        { label: 'QR Scanner',     minRole: 'cashier' },
+  reports:        { label: 'Reports',        minRole: 'manager' },
+  administration: { label: 'Administration', minRole: 'admin'   }
+};
+
+/* ================================================================
+   DEFAULT STAFF ACCOUNTS
+   Staff model: { staffId, username, password, role, createdAt }
+   ================================================================ */
+const DEMO_STAFF = [
+  { staffId: 'C001', username: 'cashier', password: 'cashier123', role: 'cashier', name: 'Cashier',  createdAt: '2025-01-01' },
+  { staffId: 'M001', username: 'manager', password: 'manager123', role: 'manager', name: 'Manager',  createdAt: '2025-01-01' },
+  { staffId: 'A001', username: 'admin',   password: 'admin123',   role: 'admin',   name: 'Admin',    createdAt: '2025-01-01' },
+];
+
+let selectedRole    = 'cashier';
+let lockoutInterval = null;
+
+/* ================================================================
+   VIEW SWITCHER
+   ================================================================ */
+function showStaffView(id) {
+  document.querySelectorAll('.sp-view').forEach(v => v.classList.remove('is-active'));
+  document.getElementById(id).classList.add('is-active');
+  window.scrollTo(0, 0);
+}
+
+/* ================================================================
+   PERMISSION ENGINE  (V2.05D)
+   ================================================================ */
+
+/** Returns the active staff role from session, or null. */
+function getActiveRole() {
+  try { return sessionStorage.getItem(SP_SESSION_ROLE_KEY) || null; } catch { return null; }
+}
+
+/** Returns the active staff ID from session, or null. */
+function getActiveStaffId() {
+  try { return sessionStorage.getItem(SP_SESSION_ID_KEY) || null; } catch { return null; }
+}
+
+/**
+ * hasPermission(role, feature)
+ * Returns true if the given role is allowed to access the feature.
+ * Admin always returns true.
+ */
+function hasPermission(role, feature) {
+  if (!role || !feature) return false;
+  if (role === 'admin') return true;
+  const allowed = ROLE_PERMISSIONS[role] || [];
+  return allowed.includes(feature);
+}
+
+/**
+ * requireStaffAuth()
+ * Route guard — redirects to login if no active staff session exists.
+ * Returns true if authenticated, false if redirected.
+ */
+function requireStaffAuth() {
+  if (!getActiveStaffId()) {
+    showStaffView('spViewLogin');
+    return false;
+  }
+  return true;
+}
+
+/**
+ * blockCustomerAccess()
+ * Prevents customer sessions from accessing this portal.
+ * If a customer session exists but no staff session, redirect to customer app.
+ * Returns true if blocked.
+ */
+function blockCustomerAccess() {
+  try {
+    const customerId = sessionStorage.getItem('activeCustomerId');
+    const staffId    = getActiveStaffId();
+    if (customerId && !staffId) {
+      window.location.href = 'index.html';
+      return true;
+    }
+  } catch {}
+  return false;
+}
+
+/**
+ * handleFeatureClick(cardEl, featureLabel)
+ * Called when any action card is clicked.
+ * 1. Verifies staff session (route protection).
+ * 2. Checks role permission.
+ * 3. Routes to the appropriate screen, or shows Coming Soon / Access Denied.
+ */
+function handleFeatureClick(cardEl, featureLabel) {
+  if (!requireStaffAuth()) return;
+
+  const feature = cardEl.dataset.feature;
+  const role    = getActiveRole();
+
+  if (!hasPermission(role, feature)) {
+    showAccessDenied(feature, featureLabel, role);
+    return;
+  }
+
+  /* Feature routing — add real screens as they are built */
+  if (feature === 'award_stamp') {
+    openScanner();
+    return;
+  }
+
+  showComingSoon(featureLabel);
+}
+
+/* ================================================================
+   ACCESS DENIED MODAL
+   ================================================================ */
+function showAccessDenied(feature, featureLabel, role) {
+  const meta     = FEATURE_META[feature] || { label: featureLabel, minRole: '—' };
+  const roleInfo = STAFF_ROLES[role]     || { label: role };
+  const minInfo  = STAFF_ROLES[meta.minRole] || { label: meta.minRole };
+
+  document.getElementById('spDeniedFeaturePill').textContent = '🔒 ' + meta.label;
+  document.getElementById('spDeniedRoleNote').textContent =
+    'Requires ' + minInfo.label + ' access or higher. ' +
+    'You are signed in as ' + roleInfo.label + '.';
+
+  document.getElementById('spAccessDeniedModal').classList.add('is-visible');
+}
+
+function closeAccessDenied(evt) {
+  /* Allow: Dismiss button click (no evt), or backdrop click */
+  if (evt && evt.target !== document.getElementById('spAccessDeniedModal')) return;
+  document.getElementById('spAccessDeniedModal').classList.remove('is-visible');
+}
+
+/* ================================================================
+   ROLE SELECTION
+   ================================================================ */
+function selectRole(role) {
+  selectedRole = role;
+  document.querySelectorAll('.sp-role-btn').forEach(btn => {
+    const isThis = btn.dataset.role === role;
+    btn.classList.toggle('is-selected', isThis);
+    btn.setAttribute('aria-pressed', isThis ? 'true' : 'false');
+  });
+  clearAlert();
+}
+
+/* ================================================================
+   FIELD HELPERS
+   ================================================================ */
+function setFieldState(fieldId, statusId, msgIconId, msgTextId, result) {
+  const field = document.getElementById(fieldId);
+  field.classList.remove('sg-field--error', 'sg-field--valid');
+  if (!result) return;
+  field.classList.add(result.ok ? 'sg-field--valid' : 'sg-field--error');
+  document.getElementById(statusId).textContent  = result.ok ? '✅' : '⚠️';
+  document.getElementById(msgIconId).textContent = result.ok ? '✅' : '⚠️';
+  document.getElementById(msgTextId).textContent = result.msg || '';
+}
+function applyStaffIdState(r)  { setFieldState('fieldStaffId',  'staffIdStatusIcon',  'staffIdMsgIcon',  'staffIdMsgText',  r); }
+function applyStaffPassState(r){ setFieldState('fieldStaffPass','staffPassStatusIcon','staffPassMsgIcon','staffPassMsgText',r); }
+
+function validateStaffId(v) {
+  const t = v.trim();
+  if (!t) return { ok:false, msg:'Username is required.' };
+  if (t.length < 3) return { ok:false, msg:'Username must be at least 3 characters.' };
+  return { ok:true, msg:'' };
+}
+function validatePass(v) {
+  if (!v) return { ok:false, msg:'Password is required.' };
+  if (v.length < 4) return { ok:false, msg:'Password is too short.' };
+  return { ok:true, msg:'' };
+}
+
+function onStaffIdInput() {
+  const f = document.getElementById('fieldStaffId');
+  if (f.classList.contains('sg-field--error')) {
+    const r = validateStaffId(document.getElementById('inputStaffId').value);
+    if (r.ok) applyStaffIdState(r);
+  }
+  clearAlert();
+}
+function onStaffIdBlur() {
+  const v = document.getElementById('inputStaffId').value;
+  if (v) applyStaffIdState(validateStaffId(v));
+}
+function onPassInput() {
+  const f = document.getElementById('fieldStaffPass');
+  if (f.classList.contains('sg-field--error')) {
+    const r = validatePass(document.getElementById('inputStaffPass').value);
+    if (r.ok) applyStaffPassState(r);
+  }
+  clearAlert();
+}
+function onPassBlur() {
+  const v = document.getElementById('inputStaffPass').value;
+  if (v) applyStaffPassState(validatePass(v));
+}
+function togglePassVisibility() {
+  const inp = document.getElementById('inputStaffPass');
+  const btn = document.getElementById('staffPassEyeBtn');
+  const hidden = inp.type === 'password';
+  inp.type = hidden ? 'text' : 'password';
+  btn.textContent = hidden ? '🙈' : '👁';
+  btn.setAttribute('aria-label', hidden ? 'Hide password' : 'Show password');
+}
+
+/* ================================================================
+   SHAKE
+   ================================================================ */
+function shakeField(fieldId) {
+  const el = document.getElementById(fieldId);
+  el.style.animation = 'none';
+  el.offsetHeight;
+  el.style.animation = 'shake 0.38s ease';
+  el.addEventListener('animationend', () => { el.style.animation = ''; }, { once:true });
+}
+
+/* ================================================================
+   ALERT
+   ================================================================ */
+function showAlert(msg) {
+  document.getElementById('spLoginAlertMsg').textContent = msg;
+  document.getElementById('spLoginAlert').classList.add('is-visible');
+}
+function clearAlert() {
+  document.getElementById('spLoginAlert').classList.remove('is-visible');
+}
+
+/* ================================================================
+   LOCKOUT
+   ================================================================ */
+function getAuthState() {
+  try { return JSON.parse(localStorage.getItem(SP_STORAGE_KEY) || '{}'); } catch { return {}; }
+}
+function saveAuthState(s) {
+  try { localStorage.setItem(SP_STORAGE_KEY, JSON.stringify(s)); } catch {}
+}
+function stopLockout() {
+  if (lockoutInterval) { clearInterval(lockoutInterval); lockoutInterval = null; }
+}
+function showLockout(until) {
+  stopLockout();
+  const banner    = document.getElementById('spLockoutBanner');
+  const timerEl   = document.getElementById('spLockoutTimer');
+  const loginBtn  = document.getElementById('spLoginBtn');
+  const idInput   = document.getElementById('inputStaffId');
+  const passInput = document.getElementById('inputStaffPass');
+  idInput.disabled = true; passInput.disabled = true; loginBtn.disabled = true;
+  document.getElementById('fieldStaffId').classList.add('sg-field--locked');
+  document.getElementById('fieldStaffPass').classList.add('sg-field--locked');
+  banner.classList.add('is-visible');
+  function tick() {
+    const rem = until - Date.now();
+    if (rem <= 0) {
+      stopLockout();
+      const s = getAuthState(); s.attempts = 0; s.lockoutUntil = null; saveAuthState(s);
+      idInput.disabled = false; passInput.disabled = false; loginBtn.disabled = false;
+      document.getElementById('fieldStaffId').classList.remove('sg-field--locked');
+      document.getElementById('fieldStaffPass').classList.remove('sg-field--locked');
+      banner.classList.remove('is-visible');
+      return;
+    }
+    const ts = Math.ceil(rem / 1000);
+    timerEl.textContent = `${Math.floor(ts/60)}m ${String(ts%60).padStart(2,'0')}s`;
+  }
+  tick();
+  lockoutInterval = setInterval(tick, 1000);
+}
+
+/* ================================================================
+   MAIN LOGIN HANDLER
+   ================================================================ */
+function handleStaffLogin() {
+  clearAlert();
+  const idVal   = document.getElementById('inputStaffId').value;
+  const passVal = document.getElementById('inputStaffPass').value;
+  const idR     = validateStaffId(idVal);
+  const passR   = validatePass(passVal);
+  applyStaffIdState(idR);
+  applyStaffPassState(passR);
+  if (!idR.ok) { shakeField('fieldStaffId');   return; }
+  if (!passR.ok){ shakeField('fieldStaffPass'); return; }
+
+  const authState = getAuthState();
+  if (authState.lockoutUntil && Date.now() < authState.lockoutUntil) {
+    showLockout(authState.lockoutUntil); return;
+  }
+
+  const btn = document.getElementById('spLoginBtn');
+  btn.classList.add('is-loading'); btn.disabled = true;
+
+  setTimeout(() => {
+    btn.classList.remove('is-loading'); btn.disabled = false;
+
+    const normalId = idVal.trim().toLowerCase();
+    const match = DEMO_STAFF.find(s =>
+      s.username === normalId && s.password === passVal && s.role === selectedRole
+    );
+
+    if (match) {
+      authState.attempts = 0; authState.lockoutUntil = null; saveAuthState(authState);
+      try {
+        sessionStorage.setItem(SP_SESSION_ID_KEY,   match.staffId);
+        sessionStorage.setItem(SP_SESSION_ROLE_KEY, match.role);
+      } catch {}
+      loadDashboard(match);
+      showStaffView('spViewDashboard');
+
+    } else {
+      const prev = authState.attempts || 0;
+      const next = prev + 1;
+      const rem  = SP_MAX_ATTEMPTS - next;
+      if (next >= SP_MAX_ATTEMPTS) {
+        const until = Date.now() + SP_LOCKOUT_MS;
+        authState.attempts = next; authState.lockoutUntil = until; saveAuthState(authState);
+        showLockout(until);
+      } else {
+        authState.attempts = next; authState.lockoutUntil = null; saveAuthState(authState);
+        const remMsg = rem === 1 ? '1 attempt remaining.' : `${rem} attempts remaining.`;
+        showAlert(`Incorrect username, password, or role. ${remMsg}`);
+        applyStaffPassState({ ok:false, msg:'Incorrect credentials.' });
+        shakeField('fieldStaffPass');
+      }
+    }
+  }, 900);
+}
+
+/* ================================================================
+   DASHBOARD POPULATION
+   ================================================================ */
+function loadDashboard(staff) {
+  document.getElementById('spStaffName').textContent      = staff.name;
+  document.getElementById('spStaffIdDisplay').textContent = staff.staffId;
+
+  const badge    = document.getElementById('spRoleBadge');
+  const roleInfo = STAFF_ROLES[staff.role] || { label: staff.role };
+  badge.textContent = roleInfo.label;
+  badge.className   = 'sp-identity__role-badge sp-identity__role-badge--' + staff.role;
+
+  const avatarMap = { cashier: '🥟', manager: '👔', admin: '🛡️' };
+  document.getElementById('spStaffAvatar').textContent = avatarMap[staff.role] || '🧑‍💼';
+
+  /* ── Permission-engine-driven card rendering ────────────────
+     For each action card, check hasPermission and update its
+     visual state + accessibility label accordingly.
+     ─────────────────────────────────────────────────────────── */
+  document.querySelectorAll('.sp-action-card').forEach(card => {
+    const feature = card.dataset.feature;
+    if (!feature) return;
+
+    /* Remove all previous permission artifacts */
+    card.classList.remove('sp-action-card--locked', 'is-unlocked');
+    card.querySelectorAll('.sp-action-card__lock, .sp-action-card__perm-note').forEach(el => el.remove());
+    card.removeAttribute('aria-disabled');
+
+    if (hasPermission(staff.role, feature)) {
+      /* Allowed — card fully active */
+      card.setAttribute('aria-disabled', 'false');
+    } else {
+      /* Blocked — card dimmed, permission note shown */
+      card.classList.add('sp-action-card--locked');
+      card.setAttribute('aria-disabled', 'true');
+
+      const meta    = FEATURE_META[feature] || {};
+      const minInfo = STAFF_ROLES[meta.minRole] || { label: meta.minRole || '?' };
+      const note    = document.createElement('span');
+      note.className   = 'sp-action-card__perm-note';
+      note.textContent = minInfo.label + '+';
+      note.setAttribute('aria-hidden', 'true');
+      card.appendChild(note);
+    }
+  });
+}
+
+/* ================================================================
+   SCANNER  (V2.06B — Camera Integration)
+   QR detection: V2.06C
+   ================================================================ */
+
+let scCameraStream = null;
+let scScanLoopId   = null; /* requestAnimationFrame handle for QR decode loop */
+let scScanCanvas   = null; /* offscreen canvas reused for frame capture */
+let scIsProcessingScan = false; /* guards against double-handling a decoded QR */
+
+/**
+ * openScanner()
+ * Navigate from dashboard to the scanner screen.
+ * Enforces staff auth + blocks customer sessions.
+ */
+function openScanner() {
+  if (!requireStaffAuth()) return;
+  if (blockCustomerAccess())  return;
+
+  /* Reset scanner to clean ready-state on each open */
+  resetScannerUI();
+  showStaffView('spViewScanner');
+}
+
+/**
+ * closeScanner()
+ * Return to the staff dashboard. Stops any active camera stream
+ * and cancels the QR decode loop.
+ */
+function closeScanner() {
+  if (!requireStaffAuth()) return;
+  stopScanLoop();
+  stopCamera();
+  showStaffView('spViewDashboard');
+}
+
+/**
+ * handleStartScanner()
+ * Requests camera permission and, if granted, opens a live preview.
+ * If denied, displays a permission-required message.
+ */
+async function handleStartScanner() {
+  const startBtn = document.getElementById('scStartBtn');
+
+  startBtn.disabled = true;
+  setScannerStatus('Requesting Access', 'Awaiting camera permission…', 'Pending',
+    'rgba(255,195,0,0.8)', 'rgba(255,195,0,0.75)', 'rgba(255,195,0,0.08)', 'rgba(255,195,0,0.22)');
+  hideCameraError();
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    showCameraError();
+    setScannerStatus('Camera Unavailable', 'This device does not support camera access', 'Error',
+      '#D63060', '#F47098', 'rgba(214,48,96,0.1)', 'rgba(214,48,96,0.3)');
+    startBtn.disabled = false;
+    return;
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment' },
+      audio: false
+    });
+
+    scCameraStream = stream;
+
+    const video = document.getElementById('scCameraVideo');
+    video.srcObject = stream;
+    video.classList.add('is-active');
+    document.getElementById('scViewfinder').classList.add('is-camera-active');
+
+    hideCameraError();
+    setScannerStatus('Camera Active', 'Scanning for QR Code…', 'Live',
+      '#2ED47A', '#2ED47A', 'rgba(46,212,122,0.1)', 'rgba(46,212,122,0.22)');
+
+    startBtn.style.opacity = '0.5';
+    startBtn.disabled = true;
+
+    /* V2.06C: begin scanning camera frames for a QR code */
+    startScanLoop();
+
+  } catch (err) {
+    showCameraError();
+    setScannerStatus('Camera Blocked', 'Camera permission was denied', 'Denied',
+      '#D63060', '#F47098', 'rgba(214,48,96,0.1)', 'rgba(214,48,96,0.3)');
+    startBtn.disabled = false;
+  }
+}
+
+/**
+ * stopCamera()
+ * Stops any active camera stream and resets the video element.
+ */
+function stopCamera() {
+  stopScanLoop();
+  if (scCameraStream) {
+    scCameraStream.getTracks().forEach(track => track.stop());
+    scCameraStream = null;
+  }
+  const video = document.getElementById('scCameraVideo');
+  video.srcObject = null;
+  video.classList.remove('is-active');
+  document.getElementById('scViewfinder').classList.remove('is-camera-active');
+}
+
+/**
+ * setScannerStatus(title, sub, badgeText, dotColor, badgeColor, badgeBg, badgeBorder)
+ * Updates the status area display.
+ */
+function setScannerStatus(title, sub, badgeText, dotColor, badgeColor, badgeBg, badgeBorder) {
+  const titleEl = document.getElementById('scStatusTitle');
+  const subEl   = document.getElementById('scStatusSub');
+  const badge   = document.getElementById('scStatusBadge');
+  const dot     = document.getElementById('scStatusDot');
+
+  titleEl.textContent = title;
+  subEl.textContent   = sub;
+  badge.textContent   = badgeText;
+  badge.style.color          = badgeColor;
+  badge.style.background     = badgeBg;
+  badge.style.borderColor    = badgeBorder;
+  dot.style.background       = dotColor;
+  dot.style.boxShadow        = `0 0 8px ${dotColor}`;
+}
+
+function showCameraError() {
+  document.getElementById('scCameraError').classList.add('is-visible');
+}
+function hideCameraError() {
+  document.getElementById('scCameraError').classList.remove('is-visible');
+}
+
+/**
+ * resetScannerUI()
+ * Restore scanner to default ready state.
+ * Called each time the scanner screen is opened.
+ */
+function resetScannerUI() {
+  stopCamera();
+  hideCameraError();
+
+  const badge    = document.getElementById('scStatusBadge');
+  const dot      = document.getElementById('scStatusDot');
+  const startBtn = document.getElementById('scStartBtn');
+
+  document.getElementById('scStatusTitle').textContent = 'Scanner Ready';
+  document.getElementById('scStatusSub').textContent   = 'Waiting for QR Code';
+  badge.textContent = 'Ready';
+  badge.style.cssText     = '';
+  dot.style.cssText       = '';
+  startBtn.style.opacity  = '';
+  startBtn.disabled       = false;
+  scIsProcessingScan      = false;
+}
+
+/* ================================================================
+   QR DECODE LOOP  (V2.06C)
+   Continuously samples frames from the live camera feed and runs
+   them through jsQR. On a successful decode, hands the raw text
+   off to handleScannedQR() and pauses scanning.
+   ================================================================ */
+
+/**
+ * startScanLoop()
+ * Begins sampling video frames via requestAnimationFrame.
+ */
+function startScanLoop() {
+  if (typeof jsQR === 'undefined') {
+    console.warn('[V2.06C] jsQR library not yet loaded — retrying shortly');
+    scScanLoopId = requestAnimationFrame(startScanLoop);
+    return;
+  }
+  if (!scScanCanvas) scScanCanvas = document.createElement('canvas');
+  scIsProcessingScan = false;
+  scScanLoopId = requestAnimationFrame(scanFrame);
+}
+
+/**
+ * stopScanLoop()
+ * Cancels the active decode loop, if any.
+ */
+function stopScanLoop() {
+  if (scScanLoopId) {
+    cancelAnimationFrame(scScanLoopId);
+    scScanLoopId = null;
+  }
+}
+
+/**
+ * scanFrame()
+ * Captures the current video frame, runs jsQR against it, and
+ * either schedules the next frame or hands off a decoded result.
+ */
+function scanFrame() {
+  const video = document.getElementById('scCameraVideo');
+
+  if (!scIsProcessingScan && video && video.readyState === video.HAVE_ENOUGH_DATA) {
+    const w = video.videoWidth, h = video.videoHeight;
+    if (w > 0 && h > 0) {
+      scScanCanvas.width  = w;
+      scScanCanvas.height = h;
+      const ctx = scScanCanvas.getContext('2d', { willReadFrequently: true });
+      ctx.drawImage(video, 0, 0, w, h);
+
+      try {
+        const imageData = ctx.getImageData(0, 0, w, h);
+        const code = jsQR(imageData.data, w, h, { inversionAttempts: 'dontInvert' });
+        if (code && code.data) {
+          scIsProcessingScan = true;
+          handleScannedQR(code.data);
+          return; /* pause loop while we process this scan */
+        }
+      } catch (err) {
+        /* getImageData can throw on some browsers before video is ready — ignore and retry */
+      }
+    }
+  }
+
+  scScanLoopId = requestAnimationFrame(scanFrame);
+}
+
+/* ================================================================
+   SCAN RESULT HANDLER  (V2.06C)
+   Receives raw decoded QR text. Parses the V2.04D secure QR
+   payload, looks up the customer in the shared backend, and
+   routes to the Customer Lookup screen.
+
+   NOTE: V2.06D will insert signature/tamper/expiry validation
+   between decode and lookup. For now, this version performs a
+   best-effort parse only (no signature verification yet).
+   ================================================================ */
+async function handleScannedQR(rawText) {
+  setScannerStatus('QR Detected', 'Looking up customer…', 'Checking',
+    'rgba(255,195,0,0.8)', 'rgba(255,195,0,0.75)', 'rgba(255,195,0,0.08)', 'rgba(255,195,0,0.22)');
+
+  let payload = null;
+  try {
+    payload = JSON.parse(rawText);
+  } catch {
+    /* Not JSON — cannot extract a customerId. V2.06D will give this
+       a proper "Corrupted QR Code" screen; for now, treat as not found. */
+    payload = null;
+  }
+
+  const customerId = payload && payload.customerId ? payload.customerId : null;
+
+  stopScanLoop();
+  stopCamera();
+
+  if (!customerId) {
+    showCustomerLookup(null);
+    return;
+  }
+
+  const customer = await clFindCustomerById(customerId);
+  showCustomerLookup(customer);
+}
+
+/* ================================================================
+   CUSTOMER LOOKUP SCREEN  (V2.06C)
+   ================================================================ */
+
+const CL_AVATAR_FALLBACK_MAP = { cashier: '🥟', manager: '🥟', admin: '🥟' };
+
+/**
+ * showCustomerLookup(customer)
+ * Renders either the found-customer card or the not-found state,
+ * then navigates to the Customer Lookup view.
+ */
+function showCustomerLookup(customer) {
+  const foundCard    = document.getElementById('clFoundCard');
+  const notFoundCard = document.getElementById('clNotFoundCard');
+
+  if (!customer) {
+    foundCard.style.display    = 'none';
+    notFoundCard.style.display = 'flex';
+    showStaffView('spViewCustomerLookup');
+    return;
+  }
+
+  /* ── Avatar / profile photo ── */
+  const avatarEl = document.getElementById('clAvatar');
+  if (customer.profilePhoto) {
+    avatarEl.innerHTML = `<img src="${customer.profilePhoto}" alt="${escapeHtml(customer.fullName || 'Customer')}'s photo">`;
+  } else {
+    avatarEl.textContent = '🥟';
+  }
+
+  /* ── Identity ── */
+  document.getElementById('clName').textContent = customer.fullName || '—';
+  document.getElementById('clCustomerId').textContent = customer.customerId || 'SG-—';
+  document.getElementById('clPassportNumber').textContent =
+    customer.passportNumber || ('PASS-' + (customer.customerId || 'SG-000000').replace('SG-', ''));
+
+  /* ── Stats ── */
+  document.getElementById('clCurrentStamps').textContent  = customer.stamps || 0;
+  document.getElementById('clRewardsClaimed').textContent = customer.rewardsClaimed || 0;
+
+  notFoundCard.style.display = 'none';
+  foundCard.style.display    = 'flex';
+  showStaffView('spViewCustomerLookup');
+}
+
+/**
+ * closeCustomerLookup()
+ * Returns to the scanner screen, ready for another scan.
+ */
+function closeCustomerLookup() {
+  if (!requireStaffAuth()) return;
+  resetScannerUI();
+  showStaffView('spViewScanner');
+}
+
+/** Minimal HTML-escaping helper for inserting customer-provided strings into innerHTML. */
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+let toastTimer = null;
+function showComingSoon(feature) {
+  const toast = document.getElementById('spToast');
+  toast.textContent = '🚧 ' + feature + ' — coming soon';
+  toast.classList.add('is-visible');
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('is-visible'), 2400);
+}
+
+/* ================================================================
+   SIGN OUT
+   ================================================================ */
+function handleSignOut() {
+  try {
+    sessionStorage.removeItem(SP_SESSION_ID_KEY);
+    sessionStorage.removeItem(SP_SESSION_ROLE_KEY);
+  } catch {}
+  /* Reset login form */
+  document.getElementById('inputStaffId').value   = '';
+  document.getElementById('inputStaffPass').value = '';
+  document.getElementById('fieldStaffId').classList.remove('sg-field--valid','sg-field--error');
+  document.getElementById('fieldStaffPass').classList.remove('sg-field--valid','sg-field--error');
+  selectRole('cashier');
+  clearAlert();
+  showStaffView('spViewLogin');
+}
+
+/* ================================================================
+   INIT
+   ================================================================ */
+(function init() {
+  /* 1. Customer protection — if a customer session is active with no
+        staff session, send them back to the customer app. */
+  if (blockCustomerAccess()) return;
+
+  /* 2. Lockout check — restore any in-progress lockout timer. */
+  const s = getAuthState();
+  if (s.lockoutUntil && Date.now() < s.lockoutUntil) showLockout(s.lockoutUntil);
+
+  /* 3. Session resume — if a valid staff session already exists,
+        skip the login screen and go straight to the dashboard. */
+  const staffId = getActiveStaffId();
+  const staffRole = getActiveRole();
+  if (staffId && staffRole) {
+    const staff = DEMO_STAFF.find(m => m.staffId === staffId && m.role === staffRole);
+    if (staff) {
+      loadDashboard(staff);
+      showStaffView('spViewDashboard');
+      return;
+    }
+    /* Session data is stale/invalid — clear it */
+    try {
+      sessionStorage.removeItem(SP_SESSION_ID_KEY);
+      sessionStorage.removeItem(SP_SESSION_ROLE_KEY);
+    } catch {}
+  }
+})();
+</script>
+</body>
+</html>
