@@ -1524,10 +1524,8 @@ body {
       <div class="sc-section-label">Scanner Preview</div>
 
       <!-- Viewfinder -->
-      <div class="sc-viewfinder" id="scViewfinder" role="img" aria-label="Scanner viewfinder — camera feed will appear here">
+      <div class="sc-viewfinder" id="scViewfinder" role="img" aria-label="Scanner viewfinder">
         <div class="sc-viewfinder__frame">
-          <!-- Live camera feed -->
-          <video class="sc-viewfinder__video" id="scCameraVideo" autoplay playsinline muted aria-hidden="true"></video>
           <!-- Scan line -->
           <div class="sc-viewfinder__scanline" aria-hidden="true"></div>
           <!-- Corner brackets -->
@@ -1535,38 +1533,43 @@ body {
           <div class="sc-corner sc-corner--tr" aria-hidden="true"></div>
           <div class="sc-corner sc-corner--bl" aria-hidden="true"></div>
           <div class="sc-corner sc-corner--br" aria-hidden="true"></div>
+          <!-- Preview of captured photo -->
+          <img id="scPhotoPreview" aria-hidden="true"
+            style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:18px;display:none;">
           <!-- Placeholder body -->
-          <div class="sc-viewfinder__body">
-            <span class="sc-viewfinder__qr-icon" aria-hidden="true">⬛</span>
-            <span class="sc-viewfinder__label">Scanner Preview</span>
+          <div class="sc-viewfinder__body" id="scViewfinderBody">
+            <span class="sc-viewfinder__qr-icon" aria-hidden="true">📷</span>
+            <span class="sc-viewfinder__label">Tap to Scan</span>
           </div>
         </div>
       </div>
+
+      <!-- Hidden file input — triggers native OS camera on mobile -->
+      <input type="file" id="scQRFileInput"
+        accept="image/*" capture="environment"
+        style="display:none;"
+        aria-hidden="true"
+        onchange="handleQRPhotoSelected(this)">
+
+      <!-- Hidden canvas for jsQR decoding -->
+      <canvas id="scDecodeCanvas" style="display:none;"></canvas>
 
       <!-- Status area -->
       <div class="sc-status" id="scStatus" role="status" aria-live="polite" aria-atomic="true">
         <div class="sc-status__indicator" id="scStatusDot" aria-hidden="true"></div>
         <div class="sc-status__text">
           <div class="sc-status__title" id="scStatusTitle">Scanner Ready</div>
-          <div class="sc-status__sub"   id="scStatusSub">Waiting for QR Code</div>
+          <div class="sc-status__sub"   id="scStatusSub">Tap the button below to scan</div>
         </div>
         <div class="sc-status__badge"   id="scStatusBadge">Ready</div>
       </div>
 
-      <!-- Camera permission denied notice (V2.06B) -->
-      <div class="sc-camera-error" id="scCameraError" role="alert" aria-live="assertive">
-        <span class="sc-camera-error__icon" aria-hidden="true">⚠️</span>
-        <div class="sc-camera-error__text">
-          Camera access required.<br>Please allow camera permission.
-        </div>
-      </div>
-
-      <!-- Primary action -->
+      <!-- Primary action — triggers native camera -->
       <button class="sc-btn-primary" type="button"
         id="scStartBtn" onclick="handleStartScanner()"
-        aria-label="Start the QR scanner camera">
+        aria-label="Open camera to scan customer QR code">
         <span aria-hidden="true">📷</span>
-        Start Scanner
+        Scan QR Code
       </button>
 
       <!-- Back button -->
@@ -2310,112 +2313,128 @@ function loadDashboard(staff) {
 }
 
 /* ================================================================
-   SCANNER  (V2.06B — Camera Integration)
-   QR detection: V2.06C
+   SCANNER  (V2.06C — Photo-based QR scanning)
+   Replaces the getUserMedia live-stream approach with a file input
+   that triggers the native OS camera. This works reliably on all
+   mobile browsers (Android Chrome, iOS Safari) without permission
+   prompts, stream timing issues, or readyState race conditions.
+
+   Flow:
+     1. Staff taps "Scan QR Code"
+     2. Native camera opens (OS-handled)
+     3. Staff takes a photo of customer's QR
+     4. handleQRPhotoSelected() reads the image
+     5. jsQR decodes the still image on a canvas
+     6. handleScannedQR() called — validation + Firebase lookup unchanged
    ================================================================ */
 
-let scCameraStream = null;
-let scScanLoopId   = null; /* requestAnimationFrame handle for QR decode loop */
-let scScanCanvas   = null; /* offscreen canvas reused for frame capture */
-let scIsProcessingScan = false; /* guards against double-handling a decoded QR */
+let scIsProcessingScan = false;
 
 /**
  * openScanner()
  * Navigate from dashboard to the scanner screen.
- * Enforces staff auth + blocks customer sessions.
  */
 function openScanner() {
   if (!requireStaffAuth()) return;
   if (blockCustomerAccess())  return;
-
-  /* Reset scanner to clean ready-state on each open */
   resetScannerUI();
   showStaffView('spViewScanner');
 }
 
 /**
  * closeScanner()
- * Return to the staff dashboard. Stops any active camera stream
- * and cancels the QR decode loop.
+ * Return to the staff dashboard.
  */
 function closeScanner() {
   if (!requireStaffAuth()) return;
-  stopScanLoop();
-  stopCamera();
+  resetScannerUI();
   showStaffView('spViewDashboard');
 }
 
 /**
  * handleStartScanner()
- * Requests camera permission and, if granted, opens a live preview.
- * If denied, displays a permission-required message.
+ * Triggers the hidden file input which opens the native camera.
  */
-async function handleStartScanner() {
-  const startBtn = document.getElementById('scStartBtn');
-
-  startBtn.disabled = true;
-  setScannerStatus('Requesting Access', 'Awaiting camera permission…', 'Pending',
-    'rgba(255,195,0,0.8)', 'rgba(255,195,0,0.75)', 'rgba(255,195,0,0.08)', 'rgba(255,195,0,0.22)');
-  hideCameraError();
-
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    showCameraError();
-    setScannerStatus('Camera Unavailable', 'This device does not support camera access', 'Error',
-      '#D63060', '#F47098', 'rgba(214,48,96,0.1)', 'rgba(214,48,96,0.3)');
-    startBtn.disabled = false;
-    return;
-  }
-
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'environment' },
-      audio: false
-    });
-
-    scCameraStream = stream;
-
-    const video = document.getElementById('scCameraVideo');
-    video.srcObject = stream;
-    video.classList.add('is-active');
-    document.getElementById('scViewfinder').classList.add('is-camera-active');
-
-    /* Mobile fix: autoplay attribute alone is not enough on Android/iOS.
-       Calling play() explicitly ensures readyState reaches HAVE_ENOUGH_DATA
-       so the jsQR scan loop can actually capture frames. */
-    video.play().catch(() => {});
-
-    hideCameraError();
-    setScannerStatus('Camera Active', 'Scanning for QR Code…', 'Live',
-      '#2ED47A', '#2ED47A', 'rgba(46,212,122,0.1)', 'rgba(46,212,122,0.22)');
-
-    startBtn.style.opacity = '0.5';
-    startBtn.disabled = true;
-
-    /* V2.06C: begin scanning camera frames for a QR code */
-    startScanLoop();
-
-  } catch (err) {
-    showCameraError();
-    setScannerStatus('Camera Blocked', 'Camera permission was denied', 'Denied',
-      '#D63060', '#F47098', 'rgba(214,48,96,0.1)', 'rgba(214,48,96,0.3)');
-    startBtn.disabled = false;
+function handleStartScanner() {
+  const input = document.getElementById('scQRFileInput');
+  if (input) {
+    /* Reset so the same photo can be re-selected if needed */
+    input.value = '';
+    input.click();
   }
 }
 
 /**
- * stopCamera()
- * Stops any active camera stream and resets the video element.
+ * handleQRPhotoSelected(inputEl)
+ * Called when staff takes/selects a photo.
+ * Draws the image to a canvas, runs jsQR, then calls handleScannedQR().
  */
-function stopCamera() {
-  stopScanLoop();
-  if (scCameraStream) {
-    scCameraStream.getTracks().forEach(track => track.stop());
-    scCameraStream = null;
+function handleQRPhotoSelected(inputEl) {
+  const file = inputEl.files && inputEl.files[0];
+  if (!file) return;
+
+  scIsProcessingScan = true;
+
+  setScannerStatus('Photo Received', 'Reading QR code…', 'Processing',
+    'rgba(255,195,0,0.8)', 'rgba(255,195,0,0.75)',
+    'rgba(255,195,0,0.08)', 'rgba(255,195,0,0.22)');
+
+  /* Show photo preview in viewfinder */
+  const preview = document.getElementById('scPhotoPreview');
+  const body    = document.getElementById('scViewfinderBody');
+  const objUrl  = URL.createObjectURL(file);
+  if (preview) {
+    preview.src = objUrl;
+    preview.style.display = 'block';
   }
-  const video = document.getElementById('scCameraVideo');
-  video.srcObject = null;
-  video.classList.remove('is-active');
-  document.getElementById('scViewfinder').classList.remove('is-camera-active');
+  if (body) body.style.display = 'none';
+
+  const img = new Image();
+  img.onload = function() {
+    URL.revokeObjectURL(objUrl);
+
+    const canvas = document.getElementById('scDecodeCanvas');
+    canvas.width  = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(img, 0, 0);
+
+    let code = null;
+    try {
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      code = jsQR(imageData.data, canvas.width, canvas.height,
+                  { inversionAttempts: 'dontInvert' });
+    } catch(e) {
+      console.warn('[Scanner] jsQR decode error', e);
+    }
+
+    if (code && code.data) {
+      console.log('[Scanner] QR detected in photo');
+      handleScannedQR(code.data);
+    } else {
+      /* Nothing found — show error and let staff try again */
+      console.warn('[Scanner] No QR code found in photo');
+      setScannerStatus('No QR Found', 'Tap below to try again', 'Retry',
+        '#D63060', '#F47098',
+        'rgba(214,48,96,0.1)', 'rgba(214,48,96,0.3)');
+      scIsProcessingScan = false;
+      /* Re-enable the button so staff can retake */
+      const btn = document.getElementById('scStartBtn');
+      if (btn) { btn.disabled = false; btn.style.opacity = ''; }
+    }
+  };
+
+  img.onerror = function() {
+    URL.revokeObjectURL(objUrl);
+    setScannerStatus('Photo Error', 'Could not read the image. Try again.', 'Error',
+      '#D63060', '#F47098',
+      'rgba(214,48,96,0.1)', 'rgba(214,48,96,0.3)');
+    scIsProcessingScan = false;
+    const btn = document.getElementById('scStartBtn');
+    if (btn) { btn.disabled = false; btn.style.opacity = ''; }
+  };
+
+  img.src = objUrl;
 }
 
 /**
@@ -2427,112 +2446,60 @@ function setScannerStatus(title, sub, badgeText, dotColor, badgeColor, badgeBg, 
   const subEl   = document.getElementById('scStatusSub');
   const badge   = document.getElementById('scStatusBadge');
   const dot     = document.getElementById('scStatusDot');
-
+  if (!titleEl) return;
   titleEl.textContent = title;
   subEl.textContent   = sub;
   badge.textContent   = badgeText;
-  badge.style.color          = badgeColor;
-  badge.style.background     = badgeBg;
-  badge.style.borderColor    = badgeBorder;
-  dot.style.background       = dotColor;
-  dot.style.boxShadow        = `0 0 8px ${dotColor}`;
+  badge.style.color       = badgeColor;
+  badge.style.background  = badgeBg;
+  badge.style.borderColor = badgeBorder;
+  dot.style.background    = dotColor;
+  dot.style.boxShadow     = `0 0 8px ${dotColor}`;
 }
 
 function showCameraError() {
-  document.getElementById('scCameraError').classList.add('is-visible');
+  const el = document.getElementById('scCameraError');
+  if (el) el.classList.add('is-visible');
 }
 function hideCameraError() {
-  document.getElementById('scCameraError').classList.remove('is-visible');
+  const el = document.getElementById('scCameraError');
+  if (el) el.classList.remove('is-visible');
 }
 
 /**
  * resetScannerUI()
  * Restore scanner to default ready state.
- * Called each time the scanner screen is opened.
  */
 function resetScannerUI() {
-  stopCamera();
   hideCameraError();
+  scIsProcessingScan = false;
+
+  /* Clear photo preview */
+  const preview = document.getElementById('scPhotoPreview');
+  const body    = document.getElementById('scViewfinderBody');
+  if (preview) { preview.src = ''; preview.style.display = 'none'; }
+  if (body)    body.style.display = '';
+
+  /* Reset file input */
+  const input = document.getElementById('scQRFileInput');
+  if (input) input.value = '';
 
   const badge    = document.getElementById('scStatusBadge');
   const dot      = document.getElementById('scStatusDot');
   const startBtn = document.getElementById('scStartBtn');
 
-  document.getElementById('scStatusTitle').textContent = 'Scanner Ready';
-  document.getElementById('scStatusSub').textContent   = 'Waiting for QR Code';
-  badge.textContent = 'Ready';
-  badge.style.cssText     = '';
-  dot.style.cssText       = '';
-  startBtn.style.opacity  = '';
-  startBtn.disabled       = false;
-  scIsProcessingScan      = false;
+  if (document.getElementById('scStatusTitle'))
+    document.getElementById('scStatusTitle').textContent = 'Scanner Ready';
+  if (document.getElementById('scStatusSub'))
+    document.getElementById('scStatusSub').textContent   = 'Tap the button below to scan';
+  if (badge)    { badge.textContent = 'Ready'; badge.style.cssText = ''; }
+  if (dot)      dot.style.cssText = '';
+  if (startBtn) { startBtn.style.opacity = ''; startBtn.disabled = false; }
 }
 
-/* ================================================================
-   QR DECODE LOOP  (V2.06C)
-   Continuously samples frames from the live camera feed and runs
-   them through jsQR. On a successful decode, hands the raw text
-   off to handleScannedQR() and pauses scanning.
-   ================================================================ */
-
-/**
- * startScanLoop()
- * Begins sampling video frames via requestAnimationFrame.
- */
-function startScanLoop() {
-  if (typeof jsQR === 'undefined') {
-    console.warn('[V2.06C] jsQR library not yet loaded — retrying shortly');
-    scScanLoopId = requestAnimationFrame(startScanLoop);
-    return;
-  }
-  if (!scScanCanvas) scScanCanvas = document.createElement('canvas');
-  scIsProcessingScan = false;
-  scScanLoopId = requestAnimationFrame(scanFrame);
-}
-
-/**
- * stopScanLoop()
- * Cancels the active decode loop, if any.
- */
-function stopScanLoop() {
-  if (scScanLoopId) {
-    cancelAnimationFrame(scScanLoopId);
-    scScanLoopId = null;
-  }
-}
-
-/**
- * scanFrame()
- * Captures the current video frame, runs jsQR against it, and
- * either schedules the next frame or hands off a decoded result.
- */
-function scanFrame() {
-  const video = document.getElementById('scCameraVideo');
-
-  if (!scIsProcessingScan && video && video.readyState === video.HAVE_ENOUGH_DATA) {
-    const w = video.videoWidth, h = video.videoHeight;
-    if (w > 0 && h > 0) {
-      scScanCanvas.width  = w;
-      scScanCanvas.height = h;
-      const ctx = scScanCanvas.getContext('2d', { willReadFrequently: true });
-      ctx.drawImage(video, 0, 0, w, h);
-
-      try {
-        const imageData = ctx.getImageData(0, 0, w, h);
-        const code = jsQR(imageData.data, w, h, { inversionAttempts: 'dontInvert' });
-        if (code && code.data) {
-          scIsProcessingScan = true;
-          handleScannedQR(code.data);
-          return; /* pause loop while we process this scan */
-        }
-      } catch (err) {
-        /* getImageData can throw on some browsers before video is ready — ignore and retry */
-      }
-    }
-  }
-
-  scScanLoopId = requestAnimationFrame(scanFrame);
-}
+/* Stub — no longer needed but kept so any external call doesn't throw */
+function stopScanLoop() {}
+function stopCamera()   {}
 
 /* ================================================================
    QR VALIDATION ENGINE  (V2.06D)
