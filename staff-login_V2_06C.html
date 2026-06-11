@@ -1542,13 +1542,38 @@ body {
           </div>
         </div>
 
+        <!-- Stamp progress bar -->
+        <div class="cl-stamp-progress" id="clStampProgress" style="width:100%;margin:4px 0 10px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <span style="font-size:11px;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:rgba(255,200,180,0.5);">Stamp Progress</span>
+            <span id="clStampProgressText" style="font-size:11px;font-weight:800;color:rgba(255,200,180,0.7);">0 / 5</span>
+          </div>
+          <div style="height:8px;background:rgba(255,255,255,0.08);border-radius:999px;overflow:hidden;">
+            <div id="clStampProgressBar" style="height:100%;border-radius:999px;background:linear-gradient(90deg,#E05580,#F2849E);transition:width 0.4s ease;width:0%;"></div>
+          </div>
+        </div>
+
+        <!-- Reward unlocked banner -->
+        <div id="clRewardBanner" style="display:none;width:100%;background:rgba(46,212,122,0.12);border:1.5px solid rgba(46,212,122,0.3);border-radius:14px;padding:12px 16px;margin-bottom:10px;text-align:center;">
+          <div style="font-size:22px;margin-bottom:4px;">🎁</div>
+          <div style="font-size:13px;font-weight:800;color:#2ED47A;margin-bottom:2px;">Free Reward Unlocked!</div>
+          <div style="font-size:11.5px;font-weight:700;color:rgba(46,212,122,0.7);">Customer has earned a free siomai reward.</div>
+        </div>
+
         <div class="cl-actions">
-          <button class="cl-btn-award" type="button" id="clAwardBtn" disabled
-            aria-label="Award stamp — coming in V2.07A">
+          <button class="cl-btn-award" type="button" id="clAwardBtn"
+            onclick="handleAwardStamp()"
+            aria-label="Award a stamp to this customer">
             <span aria-hidden="true">🏅</span>
-            Award Stamp
+            <span id="clAwardBtnText">Award Stamp</span>
           </button>
-          <p class="cl-btn-award__note">Available in V2.07A</p>
+          <button class="cl-btn-award" type="button" id="clClaimBtn"
+            onclick="handleClaimReward()"
+            style="display:none;background:linear-gradient(135deg,#1C8C5E,#2ED47A);box-shadow:0 6px 20px rgba(46,212,122,0.4);"
+            aria-label="Claim free reward for this customer">
+            <span aria-hidden="true">🎁</span>
+            Claim Free Reward
+          </button>
           <button class="cl-btn-scan-again" type="button" onclick="closeCustomerLookup()"
             aria-label="Return to scanner to scan another QR code">
             ↻ &nbsp;Scan Another Customer
@@ -2658,6 +2683,9 @@ function showCustomerLookup(customer) {
     return;
   }
 
+  /* ── Store active customer for stamp/reward actions ── */
+  _clActiveCustomerId = customer.customerId;
+
   /* ── Avatar / profile photo ── */
   const avatarEl = document.getElementById('clAvatar');
   if (customer.profilePhoto) {
@@ -2672,13 +2700,218 @@ function showCustomerLookup(customer) {
   document.getElementById('clPassportNumber').textContent =
     customer.passportNumber || ('PASS-' + (customer.customerId || 'SG-000000').replace('SG-', ''));
 
-  /* ── Stats ── */
-  document.getElementById('clCurrentStamps').textContent  = customer.stamps || 0;
-  document.getElementById('clRewardsClaimed').textContent = customer.rewardsClaimed || 0;
+  /* ── Stats + stamp progress UI ── */
+  _updateStampUI(customer);
 
   notFoundCard.style.display = 'none';
   foundCard.style.display    = 'flex';
   showStaffView('spViewCustomerLookup');
+}
+
+/* ================================================================
+   STAMP & REWARD ENGINE  (V2.07A)
+   Writes directly to the shared Firebase backend so changes are
+   immediately visible on the customer's app.
+
+   Per V2.07A spec, every stamp award must update:
+     1. Customer record     → customers:{id}
+     2. Passport progress   → passport:{id}
+     3. Activity history    → activity:{id}
+   ================================================================ */
+
+let _clActiveCustomerId = null;
+
+/* ── Helpers mirroring customer app logic ── */
+function _deriveRewardStatus(stamps, claimed) {
+  const earned = Math.floor(stamps / 5);
+  if (earned > (claimed || 0)) return 'unlocked';
+  if (stamps >= 5) return 'unlocked';
+  return 'locked';
+}
+
+function _buildPassport(customer) {
+  return {
+    passportNumber:  customer.passportNumber || ('PASS-' + customer.customerId.replace('SG-','')),
+    customerId:      customer.customerId,
+    currentStamps:   customer.stamps || 0,
+    rewardStatus:    _deriveRewardStatus(customer.stamps || 0, customer.rewardsClaimed || 0),
+    claimedRewards:  customer.rewardsClaimed || 0,
+    activityHistory: [],
+    updatedAt:       new Date().toISOString()
+  };
+}
+
+/**
+ * _spLogActivity(customerId, eventType, title, description)
+ * Fetches the existing activity array from Firebase, appends a new
+ * entry, and writes it back — so the customer app sees it immediately.
+ */
+async function _spLogActivity(customerId, eventType, title, description) {
+  const activityId = 'ACT-' + Date.now() + '-' + Math.random().toString(36).slice(2,7).toUpperCase();
+  const entry = { activityId, customerId, eventType, title, description,
+                  timestamp: new Date().toISOString() };
+  try {
+    const existing = await SG_BACKEND.get('activity:' + customerId);
+    const log = Array.isArray(existing) ? existing : [];
+    log.unshift(entry); /* newest first */
+    await SG_BACKEND.set('activity:' + customerId, log);
+  } catch {}
+}
+
+/**
+ * _spSyncPassport(customer)
+ * Updates the passport collection to match the current customer state.
+ */
+async function _spSyncPassport(customer) {
+  try {
+    const existing = await SG_BACKEND.get('passport:' + customer.customerId);
+    const passport = existing || _buildPassport(customer);
+    passport.currentStamps  = customer.stamps || 0;
+    passport.claimedRewards = customer.rewardsClaimed || 0;
+    passport.rewardStatus   = _deriveRewardStatus(passport.currentStamps, passport.claimedRewards);
+    passport.updatedAt      = new Date().toISOString();
+    await SG_BACKEND.set('passport:' + customer.customerId, passport);
+  } catch {}
+}
+
+/**
+ * _updateStampUI(customer)
+ * Refreshes the stamp progress bar, stat counters, reward banner,
+ * and shows/hides the claim button.
+ */
+function _updateStampUI(customer) {
+  const stamps  = customer.stamps || 0;
+  const claimed = customer.rewardsClaimed || 0;
+  const pct     = Math.min((stamps / 5) * 100, 100);
+  const status  = _deriveRewardStatus(stamps, claimed);
+
+  document.getElementById('clCurrentStamps').textContent  = stamps;
+  document.getElementById('clRewardsClaimed').textContent = claimed;
+  document.getElementById('clStampProgressBar').style.width = pct + '%';
+  document.getElementById('clStampProgressText').textContent = stamps + ' / 5';
+
+  const rewardBanner = document.getElementById('clRewardBanner');
+  const claimBtn     = document.getElementById('clClaimBtn');
+  const awardBtn     = document.getElementById('clAwardBtn');
+
+  if (status === 'unlocked') {
+    rewardBanner.style.display = 'block';
+    claimBtn.style.display     = 'flex';
+    awardBtn.style.display     = 'none';
+  } else {
+    rewardBanner.style.display = 'none';
+    claimBtn.style.display     = 'none';
+    awardBtn.style.display     = 'flex';
+  }
+}
+
+/**
+ * handleAwardStamp()  — V2.07A
+ * 1. Fetches latest customer from Firebase
+ * 2. Increments stamps
+ * 3. Writes customer record
+ * 4. Syncs passport progress
+ * 5. Logs activity entry
+ * 6. Updates UI
+ */
+async function handleAwardStamp() {
+  if (!_clActiveCustomerId) return;
+  const btn     = document.getElementById('clAwardBtn');
+  const btnText = document.getElementById('clAwardBtnText');
+  btn.disabled  = true;
+  btnText.textContent = 'Saving…';
+
+  try {
+    /* Step 1 — fetch latest */
+    let customer = await SG_BACKEND.get('customers:' + _clActiveCustomerId);
+    if (!customer) {
+      btnText.textContent = '❌ Customer Not Found';
+      setTimeout(() => { btnText.textContent = 'Award Stamp'; btn.disabled = false; }, 2000);
+      return;
+    }
+
+    /* Step 2 — increment */
+    customer.stamps       = (customer.stamps || 0) + 1;
+    const n               = customer.stamps;
+    const cycleCompleted  = (n % 5 === 0);
+    customer.rewardStatus = _deriveRewardStatus(n, customer.rewardsClaimed || 0);
+    customer.updatedAt    = new Date().toISOString();
+
+    /* Step 3, 4, 5 — write all three collections in parallel */
+    await Promise.all([
+      SG_BACKEND.set('customers:' + _clActiveCustomerId, customer),
+      _spSyncPassport(customer),
+      _spLogActivity(_clActiveCustomerId, 'stamp',
+        `Stamp #${n} Collected 🥟`,
+        `Staff awarded stamp #${n}. ${n} stamp${n !== 1 ? 's' : ''} collected.`),
+      cycleCompleted
+        ? _spLogActivity(_clActiveCustomerId, 'rewardUnlocked',
+            'Free Shumai Reward Unlocked! 🎁',
+            'Congratulations! You\'ve earned a free Shumai reward. Visit us to claim it.')
+        : Promise.resolve()
+    ]);
+
+    /* Refresh local lookup cache */
+    const cache = clLoadCustomersCache();
+    const idx   = cache.findIndex(c => c.customerId === _clActiveCustomerId);
+    if (idx >= 0) cache[idx] = customer; else cache.push(customer);
+    _clCacheSet(CL_CACHE_CUSTOMERS, cache);
+
+    /* Step 6 — update UI */
+    _updateStampUI(customer);
+    btnText.textContent = '✅ Stamp Awarded!';
+    setTimeout(() => { btnText.textContent = 'Award Stamp'; btn.disabled = false; }, 1800);
+
+  } catch (e) {
+    btnText.textContent = '❌ Save Failed';
+    setTimeout(() => { btnText.textContent = 'Award Stamp'; btn.disabled = false; }, 2000);
+  }
+}
+
+/**
+ * handleClaimReward()  — V2.07A
+ * Resets stamp cycle, increments rewardsClaimed, syncs all collections.
+ */
+async function handleClaimReward() {
+  if (!_clActiveCustomerId) return;
+  const btn    = document.getElementById('clClaimBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span aria-hidden="true">⏳</span> Processing…';
+
+  try {
+    let customer = await SG_BACKEND.get('customers:' + _clActiveCustomerId);
+    if (!customer) {
+      btn.innerHTML = '❌ Customer Not Found';
+      setTimeout(() => { btn.disabled = false; btn.innerHTML = '<span aria-hidden="true">🎁</span> Claim Free Reward'; }, 2000);
+      return;
+    }
+
+    customer.stamps         = (customer.stamps || 0) % 5;
+    customer.rewardsClaimed = (customer.rewardsClaimed || 0) + 1;
+    customer.rewardStatus   = _deriveRewardStatus(customer.stamps, customer.rewardsClaimed);
+    customer.updatedAt      = new Date().toISOString();
+
+    await Promise.all([
+      SG_BACKEND.set('customers:' + _clActiveCustomerId, customer),
+      _spSyncPassport(customer),
+      _spLogActivity(_clActiveCustomerId, 'rewardClaimed',
+        'Free Shumai Reward Claimed! ✅',
+        `Reward #${customer.rewardsClaimed} claimed. Enjoy your Shumai!`)
+    ]);
+
+    const cache = clLoadCustomersCache();
+    const idx   = cache.findIndex(c => c.customerId === _clActiveCustomerId);
+    if (idx >= 0) cache[idx] = customer; else cache.push(customer);
+    _clCacheSet(CL_CACHE_CUSTOMERS, cache);
+
+    _updateStampUI(customer);
+    btn.innerHTML = '✅ Reward Claimed!';
+    setTimeout(() => { btn.disabled = false; btn.innerHTML = '<span aria-hidden="true">🎁</span> Claim Free Reward'; }, 1800);
+
+  } catch (e) {
+    btn.innerHTML = '❌ Save Failed';
+    setTimeout(() => { btn.disabled = false; btn.innerHTML = '<span aria-hidden="true">🎁</span> Claim Free Reward'; }, 2000);
+  }
 }
 
 /**
@@ -2686,6 +2919,7 @@ function showCustomerLookup(customer) {
  * Returns to the scanner screen, ready for another scan.
  */
 function closeCustomerLookup() {
+  _clActiveCustomerId = null;
   if (!requireStaffAuth()) return;
   resetScannerUI();
   showStaffView('spViewScanner');
