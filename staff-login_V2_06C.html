@@ -1079,6 +1079,89 @@ body {
 .cl-btn-scan-again:active { transform: scale(0.98); }
 
 /* ============================================================
+   V2.07B — STAMP HISTORY PANEL
+   ============================================================ */
+.cl-history-btn {
+  width: 100%; height: 44px;
+  font-family: var(--sg-font-body); font-size: 13px; font-weight: 800;
+  letter-spacing: 0.06em; color: rgba(255,200,180,0.5);
+  background: transparent;
+  border: 1.5px solid rgba(255,200,180,0.12);
+  border-radius: var(--sg-radius-md); cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  transition: color 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+.cl-history-btn:hover {
+  color: rgba(255,200,180,0.8);
+  border-color: rgba(255,200,180,0.25);
+  background: rgba(255,200,180,0.04);
+}
+.cl-history-panel {
+  width: 100%;
+  background: rgba(255,255,255,0.04);
+  border: 1.5px solid rgba(255,200,180,0.12);
+  border-radius: var(--sg-radius-md);
+  overflow: hidden;
+  margin-top: 4px;
+  animation: view-in 0.3s cubic-bezier(0.34,1.56,0.64,1) both;
+}
+.cl-history-panel__header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px 10px;
+  border-bottom: 1px solid rgba(255,200,180,0.1);
+}
+.cl-history-panel__title {
+  font-size: 11px; font-weight: 800; letter-spacing: 0.14em;
+  text-transform: uppercase; color: rgba(255,200,180,0.5);
+}
+.cl-history-panel__count {
+  font-size: 11px; font-weight: 800;
+  color: rgba(255,200,180,0.35); letter-spacing: 0.04em;
+}
+.cl-history-list {
+  max-height: 240px; overflow-y: auto;
+  display: flex; flex-direction: column;
+}
+.cl-history-list::-webkit-scrollbar { width: 3px; }
+.cl-history-list::-webkit-scrollbar-thumb { background: rgba(255,200,180,0.18); border-radius: 99px; }
+.cl-history-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid rgba(255,200,180,0.07);
+}
+.cl-history-item:last-child { border-bottom: none; }
+.cl-history-item__icon {
+  width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+  background: rgba(242,132,158,0.12);
+  border: 1px solid rgba(242,132,158,0.22);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px; line-height: 1;
+}
+.cl-history-item__body { flex: 1; min-width: 0; }
+.cl-history-item__txid {
+  font-size: 10.5px; font-weight: 800; letter-spacing: 0.06em;
+  color: rgba(255,200,180,0.55);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.cl-history-item__meta {
+  font-size: 10px; font-weight: 700;
+  color: rgba(255,200,180,0.32); margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.cl-history-item__time {
+  font-size: 10px; font-weight: 800;
+  color: rgba(255,200,180,0.3); flex-shrink: 0; text-align: right;
+}
+.cl-history-empty {
+  padding: 24px 16px; text-align: center;
+  font-size: 12px; font-weight: 700; color: rgba(255,200,180,0.3);
+}
+.cl-history-loading {
+  padding: 20px 16px; text-align: center;
+  font-size: 12px; font-weight: 700; color: rgba(255,200,180,0.3);
+}
+
+/* ============================================================
    V2.06C — CUSTOMER NOT FOUND
    ============================================================ */
 .cl-notfound {
@@ -1574,6 +1657,26 @@ body {
             <span aria-hidden="true">🎁</span>
             Claim Free Reward
           </button>
+          <button class="cl-history-btn" type="button" id="clHistoryBtn"
+            onclick="toggleStampHistory()" aria-expanded="false"
+            aria-label="View stamp transaction history for this customer">
+            <span aria-hidden="true">📋</span>
+            <span id="clHistoryBtnText">View Stamp History</span>
+          </button>
+
+          <!-- Stamp history panel (hidden until toggled) -->
+          <div id="clHistoryPanel" style="display:none;">
+            <div class="cl-history-panel">
+              <div class="cl-history-panel__header">
+                <span class="cl-history-panel__title">Stamp Transactions</span>
+                <span class="cl-history-panel__count" id="clHistoryCount">—</span>
+              </div>
+              <div class="cl-history-list" id="clHistoryList">
+                <div class="cl-history-loading">Loading…</div>
+              </div>
+            </div>
+          </div>
+
           <button class="cl-btn-scan-again" type="button" onclick="closeCustomerLookup()"
             aria-label="Return to scanner to scan another QR code">
             ↻ &nbsp;Scan Another Customer
@@ -2686,6 +2789,14 @@ function showCustomerLookup(customer) {
   /* ── Store active customer for stamp/reward actions ── */
   _clActiveCustomerId = customer.customerId;
 
+  /* ── Reset history panel on each new customer load ── */
+  const _hp = document.getElementById('clHistoryPanel');
+  const _hb = document.getElementById('clHistoryBtn');
+  const _ht = document.getElementById('clHistoryBtnText');
+  if (_hp) _hp.style.display = 'none';
+  if (_hb) _hb.setAttribute('aria-expanded', 'false');
+  if (_ht) _ht.textContent = 'View Stamp History';
+
   /* ── Avatar / profile photo ── */
   const avatarEl = document.getElementById('clAvatar');
   if (customer.profilePhoto) {
@@ -2805,6 +2916,111 @@ function _updateStampUI(customer) {
   }
 }
 
+/* ================================================================
+   STAMP TRANSACTION LOG  (V2.07B)
+   Collection: stamps_log:{customerId}
+   Schema: { transactionId, customerId, staffId, timestamp }
+   ================================================================ */
+
+/**
+ * _spWriteStampTransaction(customerId)
+ * Creates a stamped transaction record and appends it to
+ * stamps_log:{customerId} in Firebase.
+ */
+async function _spWriteStampTransaction(customerId) {
+  const staffId       = getActiveStaffId() || 'UNKNOWN';
+  const transactionId = 'STX-' + Date.now() + '-' + Math.random().toString(36).slice(2,6).toUpperCase();
+  const record = {
+    transactionId,
+    customerId,
+    staffId,
+    timestamp: new Date().toISOString()
+  };
+  try {
+    const existing = await SG_BACKEND.get('stamps_log:' + customerId);
+    const log = Array.isArray(existing) ? existing : [];
+    log.unshift(record); /* newest first */
+    await SG_BACKEND.set('stamps_log:' + customerId, log);
+  } catch (e) {
+    console.warn('[V2.07B] Failed to write stamp transaction', e);
+  }
+  return record;
+}
+
+/**
+ * toggleStampHistory()
+ * Shows/hides the stamp history panel and loads data on first open.
+ */
+async function toggleStampHistory() {
+  const panel   = document.getElementById('clHistoryPanel');
+  const btn     = document.getElementById('clHistoryBtn');
+  const btnText = document.getElementById('clHistoryBtnText');
+  const isOpen  = panel.style.display !== 'none';
+
+  if (isOpen) {
+    panel.style.display = 'none';
+    btn.setAttribute('aria-expanded', 'false');
+    btnText.textContent = 'View Stamp History';
+    return;
+  }
+
+  panel.style.display = 'block';
+  btn.setAttribute('aria-expanded', 'true');
+  btnText.textContent = 'Hide Stamp History';
+  _renderStampHistory(null); /* show loading state */
+
+  try {
+    const log = await SG_BACKEND.get('stamps_log:' + _clActiveCustomerId);
+    _renderStampHistory(Array.isArray(log) ? log : []);
+  } catch {
+    _renderStampHistory([]);
+  }
+}
+
+/**
+ * _renderStampHistory(transactions)
+ * Renders transaction rows into the history panel.
+ * Pass null to show a loading spinner.
+ */
+function _renderStampHistory(transactions) {
+  const list      = document.getElementById('clHistoryList');
+  const countEl   = document.getElementById('clHistoryCount');
+  if (!list) return;
+
+  if (transactions === null) {
+    list.innerHTML = '<div class="cl-history-loading">⏳ Loading…</div>';
+    if (countEl) countEl.textContent = '—';
+    return;
+  }
+
+  if (countEl) countEl.textContent = transactions.length + ' record' + (transactions.length !== 1 ? 's' : '');
+
+  if (transactions.length === 0) {
+    list.innerHTML = '<div class="cl-history-empty">No stamp transactions yet.</div>';
+    return;
+  }
+
+  list.innerHTML = transactions.map(tx => {
+    const date = tx.timestamp ? new Date(tx.timestamp) : null;
+    const dateStr = date
+      ? date.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
+      : '—';
+    const timeStr = date
+      ? date.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' })
+      : '';
+    const staffLabel = tx.staffId || '—';
+    return \`
+      <div class="cl-history-item">
+        <div class="cl-history-item__icon" aria-hidden="true">🥟</div>
+        <div class="cl-history-item__body">
+          <div class="cl-history-item__txid">\${escapeHtml(tx.transactionId || '—')}</div>
+          <div class="cl-history-item__meta">Staff: \${escapeHtml(staffLabel)}</div>
+        </div>
+        <div class="cl-history-item__time">\${escapeHtml(dateStr)}<br>\${escapeHtml(timeStr)}</div>
+      </div>\`;
+  }).join('');
+}
+
 /**
  * handleAwardStamp()  — V2.07A
  * 1. Fetches latest customer from Firebase
@@ -2837,10 +3053,11 @@ async function handleAwardStamp() {
     customer.rewardStatus = _deriveRewardStatus(n, customer.rewardsClaimed || 0);
     customer.updatedAt    = new Date().toISOString();
 
-    /* Step 3, 4, 5 — write all three collections in parallel */
+    /* Step 3, 4, 5, 6 — write all collections in parallel */
     await Promise.all([
       SG_BACKEND.set('customers:' + _clActiveCustomerId, customer),
       _spSyncPassport(customer),
+      _spWriteStampTransaction(_clActiveCustomerId),
       _spLogActivity(_clActiveCustomerId, 'stamp',
         `Stamp #${n} Collected 🥟`,
         `Staff awarded stamp #${n}. ${n} stamp${n !== 1 ? 's' : ''} collected.`),
