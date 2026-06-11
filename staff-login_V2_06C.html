@@ -3196,10 +3196,10 @@ async function handleManualIdLookup() {
       return;
     }
     input.value = '';
-    loadCustomerLookup(customerId);
-    showStaffView('spViewCustomerLookup');
+    showCustomerLookup(customer);
   } catch(e) {
-    msgEl.textContent = '❌ Lookup failed. Check connection and try again.';
+    console.error('[ManualLookup] Error:', e);
+    msgEl.textContent = '❌ ' + (e && e.message ? e.message : 'Lookup failed. Check connection and try again.');
     msgEl.style.display = 'block';
     setScannerStatus('Error', 'Could not reach database', 'Error',
       '#D63060', '#F47098', 'rgba(214,48,96,0.1)', 'rgba(214,48,96,0.3)');
